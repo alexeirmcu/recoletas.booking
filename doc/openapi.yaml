@@ -1,0 +1,445 @@
+openapi: 3.0.3
+info:
+  title: Recoletas.Booking API
+  version: 1.0.0
+  description: API for diagnostic-test appointments, holds, and waitlists.
+servers:
+  - url: http://localhost:5000
+    description: Local development
+paths:
+  /patients:
+    post:
+      summary: Register a patient
+      operationId: registerPatient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPatientRequest'
+      responses:
+        '200':
+          description: Patient registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: The supplied NHC is already registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: patient_nhc_already_exists
+                message: A patient with this NHC already exists.
+  /slots:
+    get:
+      summary: List available slots
+      operationId: getSlots
+      security:
+        - PatientId: []
+      parameters:
+        - name: testType
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TestType'
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Matching slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SlotSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /slots/{id}/hold:
+    post:
+      summary: Place a temporary hold on a slot
+      operationId: holdSlot
+      security:
+        - PatientId: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Hold result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /holds/{id}/confirm:
+    post:
+      summary: Confirm a held slot
+      operationId: confirmHold
+      security:
+        - PatientId: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmHoldRequest'
+      responses:
+        '200':
+          description: Appointment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /appointments/{id}/cancel:
+    post:
+      summary: Cancel an appointment
+      operationId: cancelAppointment
+      security:
+        - PatientId: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Appointment cancelled
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /waitlist:
+    post:
+      summary: Join the waitlist for a test type
+      operationId: joinWaitlist
+      security:
+        - PatientId: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinWaitlistRequest'
+      responses:
+        '200':
+          description: Waitlist result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /offers/{id}/accept:
+    post:
+      summary: Accept a waitlist offer
+      operationId: acceptOffer
+      security:
+        - PatientId: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptOfferRequest'
+      responses:
+        '200':
+          description: Appointment confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /offers/{id}/decline:
+    post:
+      summary: Decline a waitlist offer
+      operationId: declineOffer
+      security:
+        - PatientId: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclineOfferRequest'
+      responses:
+        '204':
+          description: Offer declined
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /appointments:
+    get:
+      summary: List the current patient's appointments
+      operationId: getAppointments
+      security:
+        - PatientId: []
+      responses:
+        '200':
+          description: Patient appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppointmentSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    PatientId:
+      type: apiKey
+      in: header
+      name: X-Patient-Id
+      description: Patient GUID used by the development identity seam.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid patient identity
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Operation conflicts with the current resource state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    RegisterPatientRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        nhc:
+          type: string
+          nullable: true
+          maxLength: 100
+          description: Optional unique NHC; surrounding whitespace is trimmed and whitespace-only values are treated as null.
+    ConfirmHoldRequest:
+      type: object
+      required: [generation]
+      properties:
+        generation:
+          type: integer
+          format: int32
+          minimum: 1
+    JoinWaitlistRequest:
+      type: object
+      required: [testType]
+      properties:
+        testType:
+          $ref: '#/components/schemas/TestType'
+    TestType:
+      type: string
+      enum: [BloodTest, Ultrasound, MRI]
+    AcceptOfferRequest:
+      type: object
+      required: [generation]
+      properties:
+        generation:
+          type: integer
+          format: int32
+          minimum: 1
+    DeclineOfferRequest:
+      type: object
+      required: [generation]
+      properties:
+        generation:
+          type: integer
+          format: int32
+          minimum: 1
+    PatientSummary:
+      type: object
+      required: [patientId, name, createdAtUtc]
+      properties:
+        patientId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        nhc:
+          type: string
+          nullable: true
+          description: The trimmed NHC value, or null when omitted or blank.
+        createdAtUtc:
+          type: string
+          format: date-time
+    SlotSummary:
+      type: object
+      required: [slotId, testType, startsAtUtc, endsAtUtc, state]
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        testType:
+          $ref: '#/components/schemas/TestType'
+        startsAtUtc:
+          type: string
+          format: date-time
+        endsAtUtc:
+          type: string
+          format: date-time
+        state:
+          type: string
+    BookingResult:
+      type: object
+      required: [succeeded]
+      properties:
+        succeeded:
+          type: boolean
+        errorCode:
+          type: string
+          nullable: true
+          enum:
+            - patient_not_found
+            - slot_not_found
+            - slot_unavailable
+            - hold_invalid_or_expired
+            - offer_invalid_or_expired
+            - appointment_not_found
+        generation:
+          type: integer
+          format: int32
+          nullable: true
+        appointment:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AppointmentSummary'
+    AppointmentSummary:
+      type: object
+      required: [reservationId, slotId, patientId, testType, confirmedAtUtc]
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        slotId:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        testType:
+          $ref: '#/components/schemas/TestType'
+        confirmedAtUtc:
+          type: string
+          format: date-time
+    WaitlistResult:
+      type: object
+      required: [joined, alreadyJoined]
+      properties:
+        joined:
+          type: boolean
+        alreadyJoined:
+          type: boolean
+        errorCode:
+          type: string
+          nullable: true
+          enum:
+            - patient_not_found
+            - already_joined
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Stable machine-readable API or business error code.
+          enum:
+            - patient_not_found
+            - patient_nhc_already_exists
+            - slot_not_found
+            - slot_unavailable
+            - hold_invalid_or_expired
+            - offer_invalid_or_expired
+            - appointment_not_found
+            - already_joined
+            - from_and_to_required
+            - invalid_patient_identity
+            - patient_identity_required
+            - validation_failed
+            - not_found
+            - conflict
+            - unauthorized
+            - internal_server_error
+        message:
+          type: string
+          description: Human-readable error message when provided.
+        details:
+          type: array
+          description: Present for validation failures; test-type validation uses unsupported_test_type as its detail code.
+          items:
+            type: object
+            required: [field, code, message]
+            properties:
+              field:
+                type: string
+              code:
+                type: string
+                example: unsupported_test_type
+              message:
+                type: string

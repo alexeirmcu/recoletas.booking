@@ -1,0 +1,55 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+artifacts/
+TestResults/
+*.trx
+coverage/
+*.coverage
+*.coveragexml
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# SQLite (runtime-generated DB files)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Test results / coverage
+TestResults/
+coverage/
+*.coverage
+
+# Runtime logs
+**/logs/
+*.log
+
+# Gentle AI generated cache (keep the human-maintained registry)
+.atl/.skill-registry.cache.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local env
+*.local.env
+appsettings.local.json
+appsettings.*.local.json
+appsettings.Production.json
+appsettings.Staging.json
+secrets.json
+.env
+.env.*
+!.env.example
+
+# NuGet packages
+*.nupkg
+*.snupkg

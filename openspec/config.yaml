@@ -1,0 +1,68 @@
+schema: spec-driven
+
+context: |
+  Project: recoletas; backend service for diagnostic test appointments (Recoletas.Booking).
+  Stack: .NET 10 (net10.0), EF Core + PostgreSQL (Npgsql), CQRS + MediatR + FluentValidation, ASP.NET Core controllers + Swagger.
+  Architecture: Layered — API → ApplicationServices → Infrastructure → Domain → Contracts (five projects, transitive references).
+  Requirements context: appointment slots, temporary holds, confirm/cancel, concurrency-safe booking, and asynchronous waitlist notifications.
+  Data constraint: synthetic data only.
+  Environment: .NET 10 target framework (build with SDK 10 or later) + Docker (PostgreSQL via docker compose).
+  Repository: git (clean init + first commit pending).
+
+strict_tdd: false
+
+testing:
+  strict_tdd: false
+  detected: 2026-11-12
+  reason: Tests were written after implementation (not strict TDD red-green); the MSTest + Moq suite covers unit, integration, and E2E.
+  test_runner:
+    available: true
+    command: dotnet test
+    framework: MSTest
+  test_layers:
+    unit:
+      available: true
+      tool: MSTest + Moq
+    integration:
+      available: true
+      tool: MSTest + Npgsql (real PostgreSQL)
+    e2e:
+      available: true
+      tool: MSTest + WebApplicationFactory
+  coverage:
+    available: false
+    command: null
+  quality_tools:
+    linter:
+      available: false
+      command: null
+    type_checker:
+      available: true
+      command: dotnet build
+    formatter:
+      available: true
+      command: dotnet format
+
+rules:
+  proposal:
+    - Include a rollback plan for risky changes.
+  specs:
+    - Use Given/When/Then scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+  design:
+    - Include sequence diagrams for complex flows.
+    - Document architecture decisions with rationale.
+  tasks:
+    - Group tasks by phase and use hierarchical numbering.
+    - Keep tasks completable in one session.
+  apply:
+    guidance:
+      - Follow the approved design and established project patterns.
+    tdd: false
+    test_command: "dotnet test"
+  verify:
+    test_command: "dotnet test"
+    build_command: "dotnet build"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas.

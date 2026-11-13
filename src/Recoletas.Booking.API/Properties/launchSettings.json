@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "Recoletas.Booking.API": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__Booking": "Host=localhost;Port=5433;Database=recoletas;Username=postgres;Password=postgres"
+      },
+      "applicationUrl": "http://localhost:5000;https://localhost:5001"
+    }
+  }
+}

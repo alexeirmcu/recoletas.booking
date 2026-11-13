@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Recoletas.Booking.Contracts/Recoletas.Booking.Contracts.csproj" />
+  <Project Path="src/Recoletas.Booking.Domain/Recoletas.Booking.Domain.csproj" />
+  <Project Path="src/Recoletas.Booking.ApplicationServices/Recoletas.Booking.ApplicationServices.csproj" />
+  <Project Path="src/Recoletas.Booking.Infrastructure/Recoletas.Booking.Infrastructure.csproj" />
+  <Project Path="src/Recoletas.Booking.API/Recoletas.Booking.API.csproj" />
+  <Project Path="tests/Recoletas.Booking.Tests/Recoletas.Booking.Tests.csproj" />
+</Solution>
