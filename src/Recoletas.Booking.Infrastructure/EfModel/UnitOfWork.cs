@@ -1,4 +1,4 @@
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Recoletas.Booking.Infrastructure.EfModel;

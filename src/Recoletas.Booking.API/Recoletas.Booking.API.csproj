@@ -3,8 +3,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UserSecretsId>recoletas-booking-api-2026-demo</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="..\..\doc\openapi.yaml" Link="openapi.yaml"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
       <PrivateAssets>all</PrivateAssets>
@@ -16,5 +22,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Recoletas.Booking.ApplicationServices\Recoletas.Booking.ApplicationServices.csproj" />
+    <ProjectReference Include="..\Recoletas.Booking.Infrastructure\Recoletas.Booking.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

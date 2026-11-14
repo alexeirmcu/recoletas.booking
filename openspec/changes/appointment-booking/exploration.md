@@ -4,13 +4,16 @@
 > Final decisions differ — see `proposal.md` and `design.md`: **PostgreSQL** (not SQLite), **.NET 10**
 > (not .NET 8), and a **layered** architecture with **five** projects (not four) and **controllers**
 > (not minimal API).
+>
+> The sections below preserve the assumptions and recommendation from that initial analysis; they
+> do not describe the implemented project or its selected design.
 
-### Current State
-This is a greenfield project: no application code, schemas, or tests exist. `openspec/config.yaml` confirms the stack and test tooling are undecided; .NET, Node.js, and Java are available, while Go is not. The only infrastructure hint is an empty `sqlserverdb/` directory, which is insufficient reason to require SQL Server or Docker. The brief requires exclusive slot assignment, expiring holds, and asynchronous FIFO waitlist offers; data must be synthetic.
+### Project State at the Time of Exploration
+At the time this analysis was written, the project was greenfield: no application code, schemas, or tests existed. The initial `openspec/config.yaml` had not yet settled the stack or test tooling; .NET, Node.js, and Java were available, while Go was not. The only infrastructure hint was an empty `sqlserverdb/` directory. Those initial conditions were superseded by the implementation described in `proposal.md` and `design.md`.
 
-### Affected Areas
-- `openspec/changes/appointment-booking/exploration.md` — records the options and recommended direction for this change.
-- Future API/domain, SQLite schema/repository, expiry and outbox workers, tests, startup script, and README — these are design areas only; none exist yet.
+### Areas Anticipated at the Time
+- `openspec/changes/appointment-booking/exploration.md` — recorded the initial options and recommendation.
+- The initial analysis anticipated a future API/domain, database repository, expiry and outbox workers, tests, startup script, and README. Those areas have since been implemented with the selected PostgreSQL design.
 
 ### Approaches
 
@@ -50,7 +53,7 @@ This is a greenfield project: no application code, schemas, or tests exist. `ope
 | **Exclusive expiring offer represented as a slot lease** | A release event is handled asynchronously. In one DB transaction, select the earliest eligible waiter by stable join sequence and conditionally change the slot from available to `Offered` with patient, offer deadline, and generation; mark that waiter offered and enqueue `OfferCreated`. The slot's exclusive-claim constraint prevents ordinary booking or another worker from taking it. Accept only via conditional update matching slot, patient, generation, and `offer_expires_at > now`; acceptance converts it to confirmed. On timeout/cancel, atomically expire the offer, advance the waiter, and enqueue the next offer. Duplicate events are no-ops against the same release/offer generation. | Recommended: simple state machine and race-safe acceptance; requires a worker and explicit idempotency. If a waiter is invalid/ineligible, record the skip and continue FIFO. |
 | Non-exclusive notification, claim on acceptance | Avoids reserving while the patient decides. | Several patients may be notified or race to accept; conflicts with “first patient on the list” and risks disappointing users. Reject. |
 
-### Recommendation
+### Initial Recommendation (Superseded)
 Use .NET 8 with a deliberately small Clean Architecture boundary, a file-backed SQLite database, and `dotnet run` as the local startup path (assuming the reviewer has the .NET 8 SDK). Enforce booking exclusivity in SQLite—not in process—with conditional state transitions, a unique constraint for live claims, and short transactions. Use a DB-polling worker for hold/offer expiry and a transactional outbox for durable asynchronous release processing and simulated notifications. Model waitlist offers as exclusive, expiring slot leases; order by a persisted FIFO sequence, and make every handler idempotent. This meets the brief without requiring Docker or a separately installed broker while keeping a credible path to a broker-backed deployment later.
 
 ### Risks
@@ -60,10 +63,12 @@ Use .NET 8 with a deliberately small Clean Architecture boundary, a file-backed 
 - `dotnet run` assumes an installed .NET 8 SDK. Confirm the target runtime/tooling and provide a concise README startup path; Docker cannot be assumed.
 - Authentication, authorization, real patient data, multi-center tenancy, production deployment, and regulatory controls are outside this demo's scope and must not be implied by synthetic-data handling.
 
-### Ready for Proposal
-Yes. Proceed with the recommended single-process .NET 8 + SQLite + transactional outbox design, and make the demo-scale constraint and at-least-once semantics explicit. No clarification is needed; validate .NET SDK availability and concurrency behavior during implementation.
+### Original Exploration Outcome (Superseded)
+At the end of the initial exploration, the recommendation was to proceed with a single-process .NET 8 + SQLite + transactional outbox design. The subsequent proposal and design superseded that recommendation; the selected implementation uses .NET 10 and PostgreSQL.
 
 ---
+
+> Historical status metadata below records the recommendation at the time of this exploration, not the current project state.
 
 **Status**: success  
 **Executive Summary**: Compared greenfield stacks and state, expiry, and messaging designs. Recommend .NET 8 + SQLite with DB-enforced exclusive claims, polling expiry, and a transactional outbox for durable at-least-once asynchronous waitlist offers.  

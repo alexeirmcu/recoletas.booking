@@ -1,0 +1,104 @@
+name: Deploy Azure Container Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub environment to deploy
+        required: true
+        type: choice
+        options: [dev, prod]
+      commit_sha:
+        description: Exact 40-character commit SHA with a successful main-branch CI run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: azure-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Validate commit and find successful CI run
+        id: provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "commit_sha must be a full lowercase 40-character SHA." >&2
+            exit 1
+          }
+          run_id="$(gh run list --workflow ci.yml --commit "$DEPLOY_SHA" --status success --limit 20 \
+            --json databaseId,headSha,headBranch,event \
+            --jq ".[] | select(.headSha == \"$DEPLOY_SHA\" and .headBranch == \"main\" and .event == \"push\") | .databaseId" \
+            | sed -n '1p')"
+          [[ -n "$run_id" ]] || {
+            echo "No successful CI run for commit $DEPLOY_SHA." >&2
+            exit 1
+          }
+          printf 'run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Download image digest from that CI run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ steps.provenance.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          gh run download "$CI_RUN_ID" --name image-digest --dir "$RUNNER_TEMP/image-digest"
+          digest="$(tr -d '\r\n' < "$RUNNER_TEMP/image-digest/digest.txt")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "CI artifact does not contain a valid image digest." >&2
+            exit 1
+          }
+          echo "::add-mask::$digest"
+          printf 'IMAGE_DIGEST=%s\n' "$digest" >> "$GITHUB_ENV"
+
+      - name: Azure OIDC login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: Provision prerequisites, run migrations, and deploy API
+        shell: pwsh
+        env:
+          DEPLOY_ENV: ${{ inputs.environment }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          ACR_RESOURCE_GROUP: ${{ vars.ACR_RESOURCE_GROUP }}
+          KEY_VAULT_NAME: ${{ vars.KEY_VAULT_NAME }}
+          VNET_ADDRESS_PREFIX: ${{ vars.VNET_ADDRESS_PREFIX }}
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
+          JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
+          RABBITMQ_HOSTNAME: ${{ vars.RABBITMQ_HOSTNAME }}
+          RABBITMQ_TLS_SERVER_NAME: ${{ vars.RABBITMQ_TLS_SERVER_NAME }}
+          RABBITMQ_VHOST: ${{ secrets.RABBITMQ_VHOST }}
+          RABBITMQ_USERNAME: ${{ secrets.RABBITMQ_USERNAME }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+        run: ./scripts/deployment/Deploy-Azure.ps1

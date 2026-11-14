@@ -1,11 +1,11 @@
-using Recoletas.Booking.Contracts.Events;
+using Recoletas.Booking.Domain.Events;
 using Recoletas.Booking.Domain.ValueObjects;
 
 namespace Recoletas.Booking.Domain.Entities;
 
 public sealed class Slot
 {
-    private readonly List<object> _pendingEvents = [];
+    private readonly List<SlotDomainEvent> _pendingEvents = [];
 
     public Slot(SlotId id, TestType testType, DateTimeOffset startsAtUtc, DateTimeOffset endsAtUtc)
     {
@@ -41,9 +41,9 @@ public sealed class Slot
 
     public int Generation { get; private set; }
 
-    public IReadOnlyCollection<object> DomainEvents => _pendingEvents;
+    public IReadOnlyCollection<SlotDomainEvent> DomainEvents => _pendingEvents;
 
-    public IReadOnlyList<object> DrainDomainEvents()
+    public IReadOnlyList<SlotDomainEvent> DrainDomainEvents()
     {
         var events = _pendingEvents.ToArray();
         _pendingEvents.Clear();
@@ -76,7 +76,7 @@ public sealed class Slot
         HoldExpiresAtUtc = expiresAt;
         OfferExpiresAtUtc = null;
         Generation++;
-        _pendingEvents.Add(new HoldConfirmationRequested(Guid.NewGuid(), Id.Value, patientId.Value,
+        _pendingEvents.Add(new HoldPlaced(Guid.NewGuid(), Id.Value, patientId.Value,
             TestType.Value, Generation, expiresAt, now));
         return true;
     }
@@ -96,7 +96,7 @@ public sealed class Slot
         Generation++;
         var reservation = Reservation.Create(Id, patientId, now);
         CurrentReservationId = reservation.Id;
-        _pendingEvents.Add(new AppointmentConfirmed(Guid.NewGuid(), Id.Value, patientId.Value,
+        _pendingEvents.Add(new AppointmentConfirmedEvent(Guid.NewGuid(), Id.Value, patientId.Value,
             reservation.Id, TestType.Value, now));
         return reservation;
     }
@@ -129,7 +129,7 @@ public sealed class Slot
         OfferExpiresAtUtc = expiresAt;
         HoldExpiresAtUtc = null;
         Generation++;
-        _pendingEvents.Add(new OfferCreated(Guid.NewGuid(), Id.Value, patientId.Value, TestType.Value,
+        _pendingEvents.Add(new OfferPlaced(Guid.NewGuid(), Id.Value, patientId.Value, TestType.Value,
             Generation, expiresAt, now));
         return true;
     }
@@ -149,7 +149,7 @@ public sealed class Slot
         Generation++;
         var reservation = Reservation.Create(Id, patientId, now);
         CurrentReservationId = reservation.Id;
-        _pendingEvents.Add(new AppointmentConfirmed(Guid.NewGuid(), Id.Value, patientId.Value,
+        _pendingEvents.Add(new AppointmentConfirmedEvent(Guid.NewGuid(), Id.Value, patientId.Value,
             reservation.Id, TestType.Value, now));
         return reservation;
     }
@@ -201,7 +201,7 @@ public sealed class Slot
         State == SlotState.Offered && OfferExpiresAtUtc <= nowUtc;
 
     private void RaiseReleased(DateTimeOffset occurredAtUtc) =>
-        _pendingEvents.Add(new SlotReleased(Guid.NewGuid(), Id.Value, TestType.Value, Generation,
+        _pendingEvents.Add(new SlotReleasedEvent(Guid.NewGuid(), Id.Value, TestType.Value, Generation,
             occurredAtUtc.ToUniversalTime()));
 
     private void Release()

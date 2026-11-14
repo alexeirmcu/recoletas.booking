@@ -11,24 +11,25 @@ metadata:
 Activate this skill when creating new projects, moving logic between layers, or reviewing architecture compliance.
 
 ## Hard Rules
-- **Domain Purity**: `Recoletas.Booking.Domain` MUST have zero framework dependencies (except `Microsoft.Extensions.DependencyInjection.Abstractions`). No EF Core, no MediatR.
+- **Domain Purity**: `Recoletas.Booking.Domain` MUST have zero project and package references. No EF Core, MediatR, DI abstractions, or integration Contracts.
 - **Contracts Purity**: `Recoletas.Booking.Contracts` MUST have zero package dependencies and zero project references — plain serializable records only.
-- **Dependency Flow**: dependencies flow in one direction:
-  `API` → `ApplicationServices` → `Infrastructure` → `Domain` → `Contracts`.
+- **Dependency Rule**: dependencies point inward:
+  `API` → `ApplicationServices` → `Domain`; `API` → `Infrastructure` → `ApplicationServices` and `Domain`.
+  ApplicationServices and Infrastructure may both depend on Contracts; Domain MUST NOT.
 - **Infrastructure Isolation**: EF Core types (`DbContext`, `DbSet`) and PostgreSQL specifics MUST stay within `Recoletas.Booking.Infrastructure`.
-- **Composition Root**: Infrastructure is wired in `Program.cs` via `AddInfrastructure`; controllers never touch Infrastructure types.
-- **Minimal References**: each project references only the next layer — `API → ApplicationServices → Infrastructure → Domain → Contracts` — relying on transitive project references for the rest.
+- **Composition Root**: API references ApplicationServices and Infrastructure directly and wires them in `Program.cs`; controllers never touch Infrastructure types.
+- **Ports and Adapters**: application-facing repository, unit-of-work, clock, outbox, notification, and dispatcher abstractions live in ApplicationServices. Infrastructure implements them.
 - **Never Commit Secrets**: do not commit sensitive data (real connection strings, API keys, credentials). Provide them via environment variables or user-secrets; keep only empty placeholders in committed `appsettings*.json`. Local non-sensitive dev defaults (e.g. the docker `postgres`/`postgres`) may live in `launchSettings.json`.
 - **No Business Logic in Controllers**: controllers must only build a command and call `_mediator.Send()`.
-- **Integration Events live in Contracts**: cross-service events are plain records in `Recoletas.Booking.Contracts/Events/`. The Domain raises them; there is no `IDomainEvent` marker.
+- **Event Boundary**: Domain owns domain-event records and MUST NOT reference integration Contracts. ApplicationServices maps domain events to plain integration-event records in `Recoletas.Booking.Contracts/Events/`. Do not add an `IDomainEvent` marker.
 
 ## Decision Gates
 | Scenario | Action |
 |----------|--------|
 | New business rule | Implement in `Domain` (Entities/Value Objects) or `ApplicationServices` (Handlers). |
-| New external API/DB call | Define interface in `Domain` (`Repository/` or `Services/`), implement in `Infrastructure`. |
+| New application use-case dependency | Define its port in `ApplicationServices/Abstractions/`, implement it in `Infrastructure`. |
 | New API endpoint | Controller in `API` → Command in `ApplicationServices` → Handler in `ApplicationServices`. |
-| New integration event | Add plain record to `Contracts/Events/`; raise it from the Domain. |
+| New domain/integration event | Define domain-owned event data in Domain; map it in ApplicationServices to a plain record in `Contracts/Events/`. |
 
 ## Execution Steps
 1. Identify the target layer.

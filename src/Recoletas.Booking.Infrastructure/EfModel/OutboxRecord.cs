@@ -14,6 +14,8 @@ public sealed class OutboxRecord
 
     public DateTimeOffset? LeaseUntilUtc { get; set; }
 
+    public Guid? LeaseToken { get; set; }
+
     public DateTimeOffset? ProcessedAtUtc { get; set; }
 
     public DateTimeOffset? DeadAtUtc { get; set; }

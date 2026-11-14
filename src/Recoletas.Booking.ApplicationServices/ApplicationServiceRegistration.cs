@@ -5,11 +5,11 @@ using Microsoft.Extensions.Options;
 using Recoletas.Booking.ApplicationServices.Behaviors;
 using Recoletas.Booking.ApplicationServices.Commands;
 using Recoletas.Booking.ApplicationServices.Handlers;
-using Recoletas.Booking.ApplicationServices.Messaging;
 using Recoletas.Booking.ApplicationServices.Outbox;
 using Recoletas.Booking.ApplicationServices.Validators;
 using Recoletas.Booking.ApplicationServices.Workers;
-using Recoletas.Booking.Domain.Services;
+using Recoletas.Booking.ApplicationServices.Abstractions;
+using Recoletas.Booking.ApplicationServices.Messaging;
 
 namespace Recoletas.Booking.ApplicationServices;
 
@@ -42,9 +42,6 @@ public static class ApplicationServiceRegistration
         });
         services.AddValidatorsFromAssemblyContaining<BlockSlotValidator>();
 
-        services.AddScoped<PollingDispatcher>();
-        services.AddScoped<IEventDispatcher>(provider => provider.GetRequiredService<PollingDispatcher>());
-
         services.Configure<OutboxProcessorOptions>(o =>
         {
             o.BatchSize = options.Outbox.BatchSize;
@@ -54,6 +51,8 @@ public static class ApplicationServiceRegistration
         });
         services.AddScoped(provider => provider.GetRequiredService<IOptions<OutboxProcessorOptions>>().Value);
         services.AddScoped<OutboxProcessor>();
+        services.AddScoped<SlotReleasedEventHandler>();
+        services.AddScoped<NotificationEventHandler>();
 
         services.Configure<ExpireHoldsOptions>(o =>
             o.PollInterval = options.ExpireHolds.PollInterval);

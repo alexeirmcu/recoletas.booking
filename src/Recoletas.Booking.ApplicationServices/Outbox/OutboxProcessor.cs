@@ -1,4 +1,4 @@
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.ApplicationServices.Messaging;
 using Microsoft.Extensions.Logging;
 
@@ -15,9 +15,18 @@ public sealed class OutboxProcessor(IOutboxStore outbox, IEventDispatcher dispat
             try
             {
                 await dispatcher.DispatchAsync(message, cancellationToken);
-                await outbox.MarkProcessedAsync(message.Id, cancellationToken);
-                logger.LogInformation("Outbox message {EventId} of type {EventType} was processed.",
-                    message.Id, message.EventType);
+                var completed = await outbox.MarkProcessedAsync(message.Id, message.LeaseToken, cancellationToken);
+                if (completed)
+                {
+                    logger.LogInformation("Outbox message {EventId} of type {EventType} was processed.",
+                        message.Id, message.EventType);
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Outbox message {EventId} of type {EventType} lost its lease before completion.",
+                        message.Id, message.EventType);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -25,12 +34,19 @@ public sealed class OutboxProcessor(IOutboxStore outbox, IEventDispatcher dispat
             }
             catch (Exception exception)
             {
-                var deadLettered = await outbox.RecordFailureAsync(message.Id, exception.Message,
+                var failureResult = await outbox.RecordFailureAsync(message.Id, message.LeaseToken, exception.Message,
                     options.RetryBaseDelay, options.MaxAttempts, cancellationToken);
+                var disposition = failureResult switch
+                {
+                    OutboxFailureResult.RetryScheduled => "will be retried",
+                    OutboxFailureResult.DeadLettered => "was dead-lettered",
+                    OutboxFailureResult.LeaseLost => "lost its lease before failure could be recorded",
+                    _ => throw new ArgumentOutOfRangeException(nameof(failureResult), failureResult, null)
+                };
                 logger.LogWarning(
                     "Outbox message {EventId} of type {EventType} failed with {FailureType}; it {Disposition}.",
                     message.Id, message.EventType, exception.GetType().Name,
-                    deadLettered ? "was dead-lettered" : "will be retried");
+                    disposition);
             }
         }
 

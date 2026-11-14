@@ -38,6 +38,14 @@ When a slot is released (by cancellation or hold expiry), the system MUST asynch
 - WHEN the release is processed
 - THEN the first waiter receives an exclusive offer with an acceptance window
 
+#### Scenario: Patient discovers an offer without relying on notification delivery
+
+- GIVEN an active offer assigned to a patient with a current generation and unexpired slot window
+- WHEN that patient calls `GET /appointments/pending`
+- THEN the response contains an `offer` item with the slot ID, current generation, and expiry
+- AND the patient can use that generation with the existing offer acceptance route
+- AND notification delivery is not required for discovery
+
 #### Scenario: Empty waitlist returns slot to available
 
 - GIVEN a released slot and an empty waitlist

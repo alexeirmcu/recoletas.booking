@@ -3,7 +3,7 @@ using Recoletas.Booking.ApplicationServices.Commands;
 using Recoletas.Booking.ApplicationServices.Handlers;
 using Recoletas.Booking.Contracts.Models;
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Tests.TestSupport;
 

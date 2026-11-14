@@ -1,6 +1,7 @@
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
-using Recoletas.Booking.Contracts.Events;
+using Recoletas.Booking.ApplicationServices.Abstractions;
+using Recoletas.Booking.Domain.Events;
+using IntegrationEvents = Recoletas.Booking.Contracts.Events;
 
 namespace Recoletas.Booking.ApplicationServices.Handlers;
 
@@ -13,17 +14,25 @@ internal static class OutboxEvents
         {
             switch (integrationEvent)
             {
-                case HoldConfirmationRequested holdConfirmation:
-                    await outbox.EnqueueAsync(holdConfirmation, cancellationToken);
+                case HoldPlaced hold:
+                    await outbox.EnqueueAsync(new IntegrationEvents.HoldConfirmationRequested(hold.EventId,
+                        hold.SlotId, hold.PatientId, hold.TestType, hold.Generation, hold.ExpiresAtUtc,
+                        hold.OccurredAtUtc), cancellationToken);
                     break;
-                case SlotReleased released:
-                    await outbox.EnqueueAsync(released, cancellationToken);
+                case SlotReleasedEvent released:
+                    await outbox.EnqueueAsync(new IntegrationEvents.SlotReleased(released.EventId,
+                        released.SlotId, released.TestType, released.Generation, released.OccurredAtUtc),
+                        cancellationToken);
                     break;
-                case OfferCreated offer:
-                    await outbox.EnqueueAsync(offer, cancellationToken);
+                case OfferPlaced offer:
+                    await outbox.EnqueueAsync(new IntegrationEvents.OfferCreated(offer.EventId, offer.SlotId,
+                        offer.PatientId, offer.TestType, offer.Generation, offer.ExpiresAtUtc, offer.OccurredAtUtc),
+                        cancellationToken);
                     break;
-                case AppointmentConfirmed confirmed:
-                    await outbox.EnqueueAsync(confirmed, cancellationToken);
+                case AppointmentConfirmedEvent confirmed:
+                    await outbox.EnqueueAsync(new IntegrationEvents.AppointmentConfirmed(confirmed.EventId,
+                        confirmed.SlotId, confirmed.PatientId, confirmed.ReservationId, confirmed.TestType,
+                        confirmed.OccurredAtUtc), cancellationToken);
                     break;
                 default:
                     throw new InvalidOperationException(

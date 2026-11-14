@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Services;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 
 namespace Recoletas.Booking.Infrastructure.EfModel;

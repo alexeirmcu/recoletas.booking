@@ -12,8 +12,6 @@ public static class BookingErrorCodes
     public const string AlreadyJoined = "already_joined";
     public const string UnsupportedTestType = "unsupported_test_type";
     public const string FromAndToRequired = "from_and_to_required";
-    public const string InvalidPatientIdentity = "invalid_patient_identity";
-    public const string PatientIdentityRequired = "patient_identity_required";
     public const string ValidationFailed = "validation_failed";
     public const string NotFound = "not_found";
     public const string Conflict = "conflict";

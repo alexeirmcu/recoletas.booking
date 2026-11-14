@@ -1,7 +1,7 @@
 using MediatR;
 using Recoletas.Booking.ApplicationServices.Commands;
 using Recoletas.Booking.Contracts.Models;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 
 namespace Recoletas.Booking.ApplicationServices.Handlers;
@@ -22,7 +22,8 @@ public sealed class QueryAppointmentsHandler(IAppointmentRepository appointments
                 slot.CurrentReservationId == reservation.Id)
             {
                 results.Add(new AppointmentSummary(reservation.Id, reservation.SlotId.Value,
-                    reservation.PatientId.Value, slot.TestType.Value, reservation.ConfirmedAtUtc));
+                    reservation.PatientId.Value, slot.TestType.Value, slot.StartsAtUtc, slot.EndsAtUtc,
+                    reservation.ConfirmedAtUtc));
             }
         }
 

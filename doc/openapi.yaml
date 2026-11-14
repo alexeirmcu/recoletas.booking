@@ -6,11 +6,63 @@ info:
 servers:
   - url: http://localhost:5000
     description: Local development
+  - url: https://localhost:5001
+    description: Local development (HTTPS)
+tags:
+  - name: Patients
+    description: Patient registration.
+  - name: Slots
+    description: Slot discovery and temporary holds.
+  - name: Holds
+    description: Confirmation of held slots.
+  - name: Appointments
+    description: Confirmed appointment lookup, pending hold/offer discovery, and cancellation.
+  - name: Waitlist
+    description: Joining the waitlist.
+  - name: Offers
+    description: Accepting or declining a waitlist offer.
+  - name: Admin appointments
+    description: Read-only access to currently confirmed appointments for administrators.
 paths:
+  /health/live:
+    get:
+      summary: Check process liveness
+      operationId: checkLiveness
+      security: []
+      responses:
+        '200':
+          description: The HTTP process is running; dependency connectivity is not checked.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Healthy
+  /health/ready:
+    get:
+      summary: Check database and broker readiness
+      operationId: checkReadiness
+      security: []
+      responses:
+        '200':
+          description: PostgreSQL is reachable and the cached RabbitMQ connection is open.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Healthy
+        '503':
+          description: A dependency is unavailable. No connection or error details are exposed.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Unhealthy
   /patients:
     post:
+      tags: [Patients]
       summary: Register a patient
       operationId: registerPatient
+      security: []
       requestBody:
         required: true
         content:
@@ -37,10 +89,12 @@ paths:
                 message: A patient with this NHC already exists.
   /slots:
     get:
+      tags: [Slots]
       summary: List available slots
+      description: Returns slots effectively available within the requested interval. `to` must be later than `from`.
       operationId: getSlots
       security:
-        - PatientId: []
+        - BearerAuth: []
       parameters:
         - name: testType
           in: query
@@ -72,12 +126,15 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /slots/{id}/hold:
     post:
+      tags: [Slots]
       summary: Place a temporary hold on a slot
       operationId: holdSlot
       security:
-        - PatientId: []
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
@@ -87,18 +144,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BookingResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /holds/{id}/confirm:
     post:
+      tags: [Holds]
       summary: Confirm a held slot
       operationId: confirmHold
       security:
-        - PatientId: []
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       requestBody:
@@ -118,31 +180,39 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /appointments/{id}/cancel:
     post:
+      tags: [Appointments]
       summary: Cancel an appointment
       operationId: cancelAppointment
       security:
-        - PatientId: []
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
         '204':
           description: Appointment cancelled
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
   /waitlist:
     post:
+      tags: [Waitlist]
       summary: Join the waitlist for a test type
       operationId: joinWaitlist
       security:
-        - PatientId: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -160,14 +230,19 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /offers/{id}/accept:
     post:
+      tags: [Offers]
       summary: Accept a waitlist offer
       operationId: acceptOffer
       security:
-        - PatientId: []
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       requestBody:
@@ -183,18 +258,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AppointmentSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
   /offers/{id}/decline:
     post:
+      tags: [Offers]
       summary: Decline a waitlist offer
       operationId: declineOffer
       security:
-        - PatientId: []
+        - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       requestBody:
@@ -206,16 +286,21 @@ paths:
       responses:
         '204':
           description: Offer declined
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
   /appointments:
     get:
+      tags: [Appointments]
       summary: List the current patient's appointments
       operationId: getAppointments
       security:
-        - PatientId: []
+        - BearerAuth: []
       responses:
         '200':
           description: Patient appointments
@@ -227,13 +312,88 @@ paths:
                   $ref: '#/components/schemas/AppointmentSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /appointments/pending:
+    get:
+      tags: [Appointments]
+      summary: List the current patient's pending holds and offers
+      description: >-
+        Requires a patient token and uses only its patientId claim. Returns all current Held or
+        Offered slots assigned to that patient whose corresponding expiry and slot end are
+        strictly later than the server's current UTC time. Results are ordered by expiry, then
+        slot start, then slot ID. No pagination, history, or filters are supported. A slot may have
+        started but must not have ended, matching existing confirmation rules. This read does not
+        extend leases or modify state. Use kind and generation with the existing hold-confirm or
+        offer-accept route. The response is a snapshot: a later action can still return 409 if
+        the pending item expires or changes.
+      operationId: getPendingAppointments
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current pending holds and offers, or an empty array when none match.
+          headers:
+            Cache-Control:
+              description: Includes no-store to prevent caching patient-specific pending state.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingAppointmentSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/appointments:
+    get:
+      tags: [Admin appointments]
+      summary: List confirmed appointments for an interval
+      description: Returns only reservations still referenced by their slot in Confirmed state. The interval is based on slot start time and is inclusive of `from` and exclusive of `to`.
+      operationId: getAdminAppointments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Currently confirmed appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminAppointmentSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
-    PatientId:
-      type: apiKey
-      in: header
-      name: X-Patient-Id
-      description: Patient GUID used by the development identity seam.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Externally issued JWT with a non-empty `sub` claim and one `role` claim. Patient tokens
+        require `role=patient` and a GUID `patientId` claim. Admin tokens require `role=admin` and
+        must not contain `patientId`.
   parameters:
     Id:
       name: id
@@ -244,17 +404,21 @@ components:
         format: uuid
   responses:
     BadRequest:
-      description: Invalid request
+      description: Invalid request. Validation failures may be returned as the API error shape or ASP.NET validation problem details, depending on whether validation ran in the application or during HTTP model binding.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            oneOf:
+              - $ref: '#/components/schemas/Error'
+              - $ref: '#/components/schemas/ValidationProblemDetails'
     Unauthorized:
-      description: Missing or invalid patient identity
+      description: Missing or invalid bearer token or booking identity claims
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The authenticated token does not have the role required for this endpoint
     NotFound:
       description: Resource not found
       content:
@@ -274,7 +438,9 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
           maxLength: 200
+          description: Required and must not be empty or whitespace.
         nhc:
           type: string
           nullable: true
@@ -346,6 +512,7 @@ components:
           format: date-time
         state:
           type: string
+          enum: [Available]
     BookingResult:
       type: object
       required: [succeeded]
@@ -372,7 +539,7 @@ components:
             - $ref: '#/components/schemas/AppointmentSummary'
     AppointmentSummary:
       type: object
-      required: [reservationId, slotId, patientId, testType, confirmedAtUtc]
+      required: [reservationId, slotId, patientId, testType, startsAtUtc, endsAtUtc, confirmedAtUtc]
       properties:
         reservationId:
           type: string
@@ -388,20 +555,87 @@ components:
         confirmedAtUtc:
           type: string
           format: date-time
+          description: UTC instant when the reservation was confirmed, not the appointment schedule.
+        startsAtUtc:
+          type: string
+          format: date-time
+          description: Scheduled slot start in UTC.
+        endsAtUtc:
+          type: string
+          format: date-time
+          description: Scheduled slot end in UTC.
+    PendingAppointmentSummary:
+      type: object
+      additionalProperties: false
+      required: [slotId, testType, startsAtUtc, endsAtUtc, kind, generation, expiresAtUtc]
+      properties:
+        slotId:
+          type: string
+          format: uuid
+          description: Slot identifier used by the existing hold confirmation and offer acceptance routes.
+        testType:
+          $ref: '#/components/schemas/TestType'
+        startsAtUtc:
+          type: string
+          format: date-time
+          description: Slot start in UTC.
+        endsAtUtc:
+          type: string
+          format: date-time
+          description: Slot end in UTC.
+        kind:
+          type: string
+          enum: [hold, offer]
+          description: A hold can be confirmed; an offer can be accepted.
+        generation:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Current generation to submit with the corresponding confirmation or acceptance request.
+        expiresAtUtc:
+          type: string
+          format: date-time
+          description: Current hold or offer expiry in UTC; equality to server time means expired.
+    AdminAppointmentSummary:
+      type: object
+      required: [reservationId, slotId, testType, startsAtUtc, endsAtUtc, confirmedAtUtc, patientId, patientName]
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        slotId:
+          type: string
+          format: uuid
+        testType:
+          $ref: '#/components/schemas/TestType'
+        startsAtUtc:
+          type: string
+          format: date-time
+        endsAtUtc:
+          type: string
+          format: date-time
+        confirmedAtUtc:
+          type: string
+          format: date-time
+        patientId:
+          type: string
+          format: uuid
+        patientName:
+          type: string
     WaitlistResult:
       type: object
       required: [joined, alreadyJoined]
       properties:
         joined:
           type: boolean
+          enum: [true]
         alreadyJoined:
           type: boolean
+          enum: [false]
         errorCode:
           type: string
           nullable: true
-          enum:
-            - patient_not_found
-            - already_joined
+          description: Always null in a successful response; failures use the Error response.
     Error:
       type: object
       required: [error]
@@ -419,8 +653,6 @@ components:
             - appointment_not_found
             - already_joined
             - from_and_to_required
-            - invalid_patient_identity
-            - patient_identity_required
             - validation_failed
             - not_found
             - conflict
@@ -431,7 +663,7 @@ components:
           description: Human-readable error message when provided.
         details:
           type: array
-          description: Present for validation failures; test-type validation uses unsupported_test_type as its detail code.
+          description: Present for application validation failures; unsupported test types use unsupported_test_type as the detail code.
           items:
             type: object
             required: [field, code, message]
@@ -443,3 +675,23 @@ components:
                 example: unsupported_test_type
               message:
                 type: string
+    ValidationProblemDetails:
+      type: object
+      description: ASP.NET Core response for malformed JSON or HTTP model-binding failures.
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+          example: 400
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        traceId:
+          type: string
