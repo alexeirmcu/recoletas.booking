@@ -11,14 +11,16 @@ metadata:
 Activate this skill when adding endpoints, modifying request/response models, or implementing error handling.
 
 ## Hard Rules
-- **Source of Truth**: the OpenAPI spec (generated via Swashbuckle from the controllers) is the definitive contract.
+- **Source of Truth**: the checked-in `doc/openapi.yaml` is the definitive contract; keep it aligned with the controllers.
 - **Response Consistency**: use the Contracts Models (`SlotSummary`, `AppointmentSummary`, `PatientSummary`) as response shapes.
 - **Error Codes**:
   - `400 Bad Request`: validation failures (FluentValidation).
-  - `401 Unauthorized`: missing/invalid `X-Patient-Id`.
+  - `401 Unauthorized`: missing/invalid bearer token or required identity claims.
+  - `403 Forbidden`: authenticated token does not have the role required by the endpoint.
   - `404 Not Found`: entity not found.
   - `409 Conflict`: slot already taken, offer expired, or generation mismatch.
 - **Controller Thinness**: no business logic; only `_mediator.Send()`.
+- **Authorization**: patient routes require the `patient` role and `patientId` claim; the admin appointment read requires `admin`. Patient registration and infrastructure liveness/readiness probes are anonymous; probes expose no dependency details.
 
 ## Decision Gates
 | Action | Response Code |

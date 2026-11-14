@@ -1,5 +1,5 @@
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Infrastructure.EfModel;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +36,14 @@ public sealed class WaitlistRepository(BookingDbContext dbContext,
             .OrderBy(entry => entry.JoinedAtUtc)
             .ThenBy(entry => entry.Id)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<bool> TryClaimAsync(Guid entryId, CancellationToken cancellationToken) =>
+        await dbContext.WaitlistEntries.Where(entry => entry.Id == entryId && entry.IsActive)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(entry => entry.IsActive, false), cancellationToken) == 1;
+
+    public async Task<bool> TryRestoreClaimAsync(Guid entryId, CancellationToken cancellationToken) =>
+        await dbContext.WaitlistEntries.Where(entry => entry.Id == entryId && !entry.IsActive)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(entry => entry.IsActive, true), cancellationToken) == 1;
 
     public async Task RemoveAsync(Guid entryId, CancellationToken cancellationToken)
     {

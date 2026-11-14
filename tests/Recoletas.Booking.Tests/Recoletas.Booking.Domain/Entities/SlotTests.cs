@@ -1,5 +1,5 @@
-using Recoletas.Booking.Contracts.Events;
 using Recoletas.Booking.Domain.Entities;
+using Recoletas.Booking.Domain.Events;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Tests.TestSupport;
 
@@ -25,7 +25,7 @@ public sealed class SlotTests
         Assert.AreEqual(patient, slot.AssignedPatientId);
         Assert.AreEqual(clock.UtcNow.Add(LeaseWindow), slot.HoldExpiresAtUtc);
         Assert.AreEqual(1, slot.Generation);
-        var holdRequest = (HoldConfirmationRequested)slot.DomainEvents.Single();
+        var holdRequest = (HoldPlaced)slot.DomainEvents.Single();
         Assert.AreEqual(slot.Id.Value, holdRequest.SlotId);
         Assert.AreEqual(patient.Value, holdRequest.PatientId);
         Assert.AreEqual(slot.TestType.Value, holdRequest.TestType);
@@ -95,8 +95,8 @@ public sealed class SlotTests
         Assert.AreEqual(reservation.Id, slot.CurrentReservationId);
         Assert.IsNull(slot.HoldExpiresAtUtc);
         Assert.AreEqual(2, slot.Generation);
-        CollectionAssert.AreEquivalent(new[] { typeof(HoldConfirmationRequested), typeof(AppointmentConfirmed) },
-            slot.DomainEvents.Select(integrationEvent => integrationEvent.GetType()).ToArray());
+        CollectionAssert.AreEquivalent(new[] { typeof(HoldPlaced), typeof(AppointmentConfirmedEvent) },
+            slot.DomainEvents.Select(domainEvent => domainEvent.GetType()).ToArray());
     }
 
     [TestMethod]
@@ -131,8 +131,8 @@ public sealed class SlotTests
         Assert.AreEqual(3, slot.Generation);
         CollectionAssert.AreEquivalent(new[]
         {
-            typeof(HoldConfirmationRequested), typeof(AppointmentConfirmed), typeof(SlotReleased)
-        }, slot.DomainEvents.Select(integrationEvent => integrationEvent.GetType()).ToArray());
+            typeof(HoldPlaced), typeof(AppointmentConfirmedEvent), typeof(SlotReleasedEvent)
+        }, slot.DomainEvents.Select(domainEvent => domainEvent.GetType()).ToArray());
     }
 
     [TestMethod]

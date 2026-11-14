@@ -89,6 +89,17 @@ public sealed class QueryAppointmentsValidator : AbstractValidator<QueryAppointm
     public QueryAppointmentsValidator() => RuleFor(request => request.PatientId).NotEmpty();
 }
 
+public sealed class QueryPendingAppointmentsValidator : AbstractValidator<QueryPendingAppointments>
+{
+    public QueryPendingAppointmentsValidator() => RuleFor(request => request.PatientId).NotEmpty();
+}
+
+public sealed class QueryAdminAppointmentsValidator : AbstractValidator<QueryAdminAppointments>
+{
+    public QueryAdminAppointmentsValidator() =>
+        RuleFor(request => request.To).GreaterThan(request => request.From);
+}
+
 public sealed class RegisterPatientValidator : AbstractValidator<RegisterPatient>
 {
     public RegisterPatientValidator()

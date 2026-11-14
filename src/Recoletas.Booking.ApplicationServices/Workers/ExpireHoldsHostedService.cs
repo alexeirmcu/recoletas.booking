@@ -1,7 +1,7 @@
 using MediatR;
 using Recoletas.Booking.ApplicationServices.Commands;
-using Recoletas.Booking.Domain.Repository;
-using Recoletas.Booking.Domain.Services;
+using Recoletas.Booking.ApplicationServices.Abstractions;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

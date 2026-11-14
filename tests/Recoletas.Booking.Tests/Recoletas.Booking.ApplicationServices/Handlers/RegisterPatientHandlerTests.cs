@@ -4,8 +4,7 @@ using Recoletas.Booking.ApplicationServices.Errors;
 using Recoletas.Booking.ApplicationServices.Handlers;
 using Recoletas.Booking.Contracts.Models;
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Exceptions;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Tests.TestSupport;
 
 namespace Recoletas.Booking.Tests.Recoletas.Booking.ApplicationServices.Handlers;

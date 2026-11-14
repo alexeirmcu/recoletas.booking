@@ -3,9 +3,12 @@
     "Recoletas.Booking.API": {
       "commandName": "Project",
       "launchBrowser": true,
+      "launchUrl": "http://localhost:5000/swagger",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "ConnectionStrings__Booking": "Host=localhost;Port=5433;Database=recoletas;Username=postgres;Password=postgres"
+        "ConnectionStrings__Booking": "Host=localhost;Port=5433;Database=recoletas;Username=postgres;Password=postgres",
+        "RabbitMq__UserName": "booking_demo",
+        "RabbitMq__Password": "booking_demo"
       },
       "applicationUrl": "http://localhost:5000;https://localhost:5001"
     }

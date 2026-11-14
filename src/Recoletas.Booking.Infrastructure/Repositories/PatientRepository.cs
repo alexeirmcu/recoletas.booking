@@ -1,6 +1,6 @@
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Exceptions;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Errors;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Infrastructure.EfModel;
 using Recoletas.Booking.Infrastructure.EfModel.EntityConfiguration;

@@ -28,15 +28,15 @@ Chain strategy: stacked-to-main
 
 - [x] 1.1 Create `Recoletas.Booking.slnx` and five `net10.0` projects for Contracts, Domain, ApplicationServices, Infrastructure, and API.
 - [x] 1.2 Port `Slot`, `Patient`, `Reservation`, and `WaitlistEntry` plus `SlotId`, `PatientId`, `TestType`, and `SlotState` into the `Recoletas.Booking.Domain` namespace.
-- [x] 1.3 Add the injectable UTC `IClock` service and preserve lease-expiry and generation rules.
-- [x] 1.4 Define repository, outbox, dispatcher, notification, waitlist, and unit-of-work ports in the Domain project; remove `IDomainEvent`.
+- [x] 1.3 Initially add the injectable UTC `IClock` service in Domain; Phase 10.2 moves the port to ApplicationServices.
+- [x] 1.4 Initially define repository, outbox, dispatcher, notification, waitlist, and unit-of-work ports in Domain; Phase 10.2 moves them to ApplicationServices and removes `IDomainEvent`.
 - [x] 1.5 Add primitive event and API records to the package-free Contracts project.
 
 ## Phase 2: Core Application Logic
 
 - [x] 2.1 Preserve the slot state machine (hold, confirm, cancel, offer, accept, decline, and expiry) in the Domain entity.
 - [x] 2.2 Implement the MediatR `BlockSlot` handler with conditional hold semantics and five-minute TTL.
-- [x] 2.3 Implement confirmation and cancellation handlers with domain-raised Contracts events inside a unit of work.
+- [x] 2.3 Implement confirmation and cancellation handlers with domain events mapped to Contracts events inside a unit of work.
 - [x] 2.4 Implement `JoinWaitlist` enforcing one active entry per patient/test type.
 - [x] 2.5 Implement offer, acceptance, decline, and expiry handlers with generation checks and five-minute default offer window.
 - [x] 2.6 Implement `QueryAgenda` filtering by test type, date range, and future effective availability.
@@ -56,7 +56,7 @@ Chain strategy: stacked-to-main
 ## Phase 4: API & Composition
 
 - [x] 4.1 Add controller endpoints for patients, agenda, holds, appointments, waitlist, and offer acceptance/decline.
-- [x] 4.2 Add `X-Patient-Id` middleware and `IPatientIdentityResolver` implementation; reject missing or invalid identities.
+- [x] 4.2 Validate HS256 JWTs against the configured signing secret, issuer, and audience; resolve patient identity from the `patientId` claim.
 - [x] 4.3 Register MediatR, validators, pipeline behaviors, and infrastructure composition.
 - [x] 4.4 Add Swagger/OpenAPI and migrate plus seed the database at startup.
 
@@ -75,9 +75,9 @@ Chain strategy: stacked-to-main
 - [x] 7.1 Move `BookingResult` and `WaitlistResult` from ApplicationServices to Contracts; update consumers, OpenAPI schemas, README/SAD references, and tests.
 - [x] 7.2 Centralize API/business error codes in `ApplicationServices/Errors/BookingErrorCodes.cs` and replace duplicated string literals across handlers, controllers, middleware, and tests.
 
-## Phase 7 (continued): Messaging Port Ownership and MediatR Consistency
+## Phase 7 (continued): Initial Messaging Port Placement and MediatR Consistency
 
-- [x] 7.3 Move `IEventDispatcher` to ApplicationServices and `INotificationSender` to Infrastructure; keep `IClock` in Domain.
+- [x] 7.3 Initially place `IEventDispatcher` in ApplicationServices and `INotificationSender` in Infrastructure; Phase 10 moves all application ports inward.
 - [x] 7.4 Convert `OfferNextWaiter` and `ExpireSlotLease` to MediatR requests and route dispatcher/expiry-worker calls through `IMediator`.
 - [x] 7.5 Update handler tests and architecture documentation for the new port locations.
 
@@ -95,3 +95,12 @@ Chain strategy: stacked-to-main
 - [x] 9.6 Emit an outbox-backed hold-confirmation request after a successful hold and add privacy-safe structured logs for outbox dispatch and notification delivery.
 - [x] 9.7 Configure Serilog console logging for all environments and a rolling file sink for Development; document location/retention and ensure structured notification/outbox logs exclude patient identifiers, recipients, payload contents, and exception details.
 - [x] 9.8 Remove the unused `Generation` from the `GET /slots` agenda response (`SlotSummary`) and OpenAPI; retain generation for hold/offer confirmation flows.
+
+## Phase 10: Clean Architecture Boundaries
+
+- [x] 10.1 Create a separate `clean-architecture-boundaries` branch and preserve existing uncommitted documentation edits.
+- [x] 10.2 Move repository, outbox, unit-of-work, clock, notification, and dispatcher ports into ApplicationServices; remove its Infrastructure reference.
+- [x] 10.3 Remove Domain dependencies on Contracts and frameworks; define domain events and map them to integration Contracts events in ApplicationServices.
+- [x] 10.4 Move concrete dispatcher and notification adapters to Infrastructure and wire them through the API composition root.
+- [x] 10.5 Replace prior EF migration history with one initial migration and snapshot; do not modify any database or Docker volume.
+- [x] 10.6 Update architecture guidance; validate project references, build, migration snapshot, and unit tests without accessing a database.

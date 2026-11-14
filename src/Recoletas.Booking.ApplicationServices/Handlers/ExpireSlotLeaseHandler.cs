@@ -1,6 +1,6 @@
 using MediatR;
 using Recoletas.Booking.ApplicationServices.Commands;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 
 namespace Recoletas.Booking.ApplicationServices.Handlers;

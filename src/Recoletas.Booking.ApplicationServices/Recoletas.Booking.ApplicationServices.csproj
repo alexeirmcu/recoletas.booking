@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Recoletas.Booking.Infrastructure\Recoletas.Booking.Infrastructure.csproj" />
+    <ProjectReference Include="..\Recoletas.Booking.Contracts\Recoletas.Booking.Contracts.csproj" />
+    <ProjectReference Include="..\Recoletas.Booking.Domain\Recoletas.Booking.Domain.csproj" />
   </ItemGroup>
 </Project>

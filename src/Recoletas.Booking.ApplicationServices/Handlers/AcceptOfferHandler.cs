@@ -2,7 +2,7 @@ using MediatR;
 using Recoletas.Booking.ApplicationServices.Commands;
 using Recoletas.Booking.ApplicationServices.Errors;
 using Recoletas.Booking.Contracts.Models;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 
 namespace Recoletas.Booking.ApplicationServices.Handlers;
@@ -37,6 +37,6 @@ public sealed class AcceptOfferHandler(ISlotRepository slots, IWaitlistRepositor
 
             return new BookingResult(true, Appointment: new AppointmentSummary(mutation.Value.Id,
                 mutation.Value.SlotId.Value, mutation.Value.PatientId.Value, mutation.Slot.TestType.Value,
-                mutation.Value.ConfirmedAtUtc));
+                mutation.Slot.StartsAtUtc, mutation.Slot.EndsAtUtc, mutation.Value.ConfirmedAtUtc));
         }, cancellationToken);
 }

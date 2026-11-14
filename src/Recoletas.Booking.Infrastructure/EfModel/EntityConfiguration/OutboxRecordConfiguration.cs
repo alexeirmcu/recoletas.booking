@@ -16,6 +16,7 @@ public sealed class OutboxRecordConfiguration : IEntityTypeConfiguration<OutboxR
         builder.Property(message => message.OccurredAtUtc).HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(message => message.AvailableAtUtc).HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(message => message.LeaseUntilUtc).HasColumnType("timestamp with time zone");
+        builder.Property(message => message.LeaseToken);
         builder.Property(message => message.ProcessedAtUtc).HasColumnType("timestamp with time zone");
         builder.Property(message => message.DeadAtUtc).HasColumnType("timestamp with time zone");
         builder.Property(message => message.Attempts).IsRequired();

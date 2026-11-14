@@ -43,4 +43,10 @@ public sealed class AppointmentsController(IMediator mediator, IPatientIdentityR
     [HttpGet("appointments")]
     public async Task<IActionResult> GetAppointments(CancellationToken cancellationToken) =>
         Ok(await mediator.Send(new QueryAppointments(patientIdentity.GetRequiredPatientId()), cancellationToken));
+
+    [HttpGet("appointments/pending")]
+    [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
+    public async Task<IActionResult> GetPendingAppointments(CancellationToken cancellationToken) =>
+        Ok(await mediator.Send(
+            new QueryPendingAppointments(patientIdentity.GetRequiredPatientId()), cancellationToken));
 }

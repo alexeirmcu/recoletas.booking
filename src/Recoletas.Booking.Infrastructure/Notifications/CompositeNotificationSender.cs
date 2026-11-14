@@ -1,4 +1,5 @@
 using Recoletas.Booking.Contracts.Models;
+using Recoletas.Booking.ApplicationServices.Messaging;
 namespace Recoletas.Booking.Infrastructure.Notifications;
 
 public sealed class CompositeNotificationSender(IEnumerable<INotificationSender> senders) : INotificationSender

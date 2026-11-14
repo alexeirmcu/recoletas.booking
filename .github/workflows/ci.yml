@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 10.0.x
+  IMAGE_REPOSITORY: recoletas-booking-api
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: booking_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d booking_tests"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4.1-management
+        env:
+          RABBITMQ_DEFAULT_USER: booking_ci_admin
+          RABBITMQ_DEFAULT_PASS: booking-ci-ephemeral-admin
+          RABBITMQ_DEFAULT_VHOST: /
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      ConnectionStrings__BookingTests: Host=localhost;Port=5432;Database=booking_tests;Username=postgres;Password=postgres
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore Recoletas.Booking.slnx
+
+      - name: Build Release
+        run: dotnet build Recoletas.Booking.slnx --configuration Release --no-restore
+
+      - name: Unit tests
+        run: >-
+          dotnet test tests/Recoletas.Booking.Tests/Recoletas.Booking.Tests.csproj
+          --configuration Release --no-build
+          --filter "TestCategory=Unit"
+          --logger "trx;LogFileName=unit.trx"
+          --results-directory artifacts/TestResults/unit
+
+      - name: Integration and E2E tests
+        run: >-
+          dotnet test tests/Recoletas.Booking.Tests/Recoletas.Booking.Tests.csproj
+          --configuration Release --no-build
+          --filter "TestCategory=Integration|TestCategory=E2E"
+          --logger "trx;LogFileName=integration-e2e.trx"
+          --results-directory artifacts/TestResults/integration-e2e
+
+      - name: Configure isolated RabbitMQ broker test account
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_vhost="booking-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test_user="booking_ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          test_password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+          echo "::add-mask::$test_password"
+          api="http://localhost:15672/api"
+          curl --fail --silent --show-error --user booking_ci_admin:booking-ci-ephemeral-admin \
+            --request PUT "$api/vhosts/$test_vhost"
+          curl --fail --silent --show-error --user booking_ci_admin:booking-ci-ephemeral-admin \
+            --request PUT --header 'content-type: application/json' \
+            --data "$(TEST_PASSWORD="$test_password" python3 -c 'import json,os; print(json.dumps({"password":os.environ["TEST_PASSWORD"],"tags":""}))')" \
+            "$api/users/$test_user"
+          curl --fail --silent --show-error --user booking_ci_admin:booking-ci-ephemeral-admin \
+            --request PUT --header 'content-type: application/json' \
+            --data '{"configure":".*","write":".*","read":".*"}' \
+            "$api/permissions/$test_vhost/$test_user"
+          {
+            printf 'RabbitMqTests__VirtualHost=%s\n' "$test_vhost"
+            printf 'RabbitMqTests__UserName=%s\n' "$test_user"
+            printf 'RabbitMqTests__Password=%s\n' "$test_password"
+          } >> "$GITHUB_ENV"
+          echo "::add-mask::$test_user"
+
+      - name: Real RabbitMQ transport test
+        run: >-
+          dotnet test tests/Recoletas.Booking.Tests/Recoletas.Booking.Tests.csproj
+          --configuration Release --no-build
+          --filter "TestCategory=BrokerIntegration"
+          --logger "trx;LogFileName=broker.trx"
+          --results-directory artifacts/TestResults/broker
+        env:
+          RabbitMqTests__HostName: localhost
+
+      - name: Verify container build
+        run: docker build --tag recoletas-booking-api:${{ github.sha }} .
+
+      - name: Save tested image for publication
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker save --output "${{ runner.temp }}/booking-image.tar" recoletas-booking-api:${{ github.sha }}
+
+      - name: Upload tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tested-image
+          path: ${{ runner.temp }}/booking-image.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: Compile infrastructure templates
+        shell: pwsh
+        run: ./scripts/deployment/Deploy-Azure.ps1 -ValidateOnly
+
+      - name: Migration execution gate regression
+        shell: pwsh
+        run: ./scripts/deployment/Test-MigrationExecution.ps1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: test-results
+          path: artifacts/TestResults/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Login to Azure for main-branch image publication
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ vars.AZURE_CI_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download tested image
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: tested-image
+          path: ${{ runner.temp }}
+
+      - name: Push image and record immutable digest
+        shell: bash
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          set -euo pipefail
+          test -n "$ACR_NAME"
+          docker load --input "$RUNNER_TEMP/booking-image.tar"
+          login_server="$(az acr show --name "$ACR_NAME" --query loginServer --output tsv)"
+          tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image="$login_server/$IMAGE_REPOSITORY:$tag"
+          docker tag "recoletas-booking-api:$GITHUB_SHA" "$image"
+          az acr login --name "$ACR_NAME"
+          docker push "$image"
+          digest="$(az acr repository show --name "$ACR_NAME" --image "$IMAGE_REPOSITORY:$tag" --query digest --output tsv)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/image-digest"
+          printf '%s\n' "$digest" > "$RUNNER_TEMP/image-digest/digest.txt"
+
+      - name: Upload image digest for exact-commit deployment
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-digest
+          path: ${{ runner.temp }}/image-digest/digest.txt
+          if-no-files-found: error
+          retention-days: 90

@@ -1,1 +1,1 @@
-global using Recoletas.Booking.Domain.Services;
+global using Recoletas.Booking.ApplicationServices.Abstractions;

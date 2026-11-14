@@ -4,7 +4,7 @@ using Recoletas.Booking.ApplicationServices.Commands;
 using Recoletas.Booking.ApplicationServices.Handlers;
 using Recoletas.Booking.Contracts.Events;
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Tests.TestSupport;
 
@@ -25,7 +25,7 @@ public sealed class OfferNextWaiterHandlerTests
         var slots = new Mock<ISlotRepository>();
         slots.Setup(repository => repository.GetByIdAsync(slotId, It.IsAny<CancellationToken>())).ReturnsAsync(slot);
         slots.Setup(repository => repository.TryOfferAsync(slotId, patientId, clock.UtcNow,
-                clock.UtcNow.AddMinutes(5), It.IsAny<CancellationToken>()))
+                clock.UtcNow.AddMinutes(5), It.IsAny<CancellationToken>(), null))
             .ReturnsAsync(() =>
             {
                 slot.TryOffer(patientId, clock.UtcNow, clock.UtcNow.AddMinutes(5));
@@ -34,8 +34,8 @@ public sealed class OfferNextWaiterHandlerTests
         var waitlist = new Mock<IWaitlistRepository>();
         waitlist.Setup(repository => repository.GetNextAsync(slot.TestType, It.IsAny<CancellationToken>()))
             .ReturnsAsync(waiter);
-        waitlist.Setup(repository => repository.RemoveAsync(waiter.Id, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        waitlist.Setup(repository => repository.TryClaimAsync(waiter.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         var outbox = new Mock<IOutboxStore>();
         outbox.Setup(store => store.EnqueueAsync(It.IsAny<OfferCreated>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -49,8 +49,42 @@ public sealed class OfferNextWaiterHandlerTests
         Assert.IsTrue(offered);
         Assert.AreEqual(SlotState.Offered, slot.State);
         Assert.AreEqual(patientId, slot.AssignedPatientId);
-        waitlist.Verify(repository => repository.RemoveAsync(waiter.Id, It.IsAny<CancellationToken>()), Times.Once);
+        waitlist.Verify(repository => repository.TryClaimAsync(waiter.Id, It.IsAny<CancellationToken>()), Times.Once);
         outbox.Verify(store => store.EnqueueAsync(It.IsAny<OfferCreated>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [TestMethod]
+    public async Task Handle_OfferFails_RestoresClaimAndDoesNotEnqueueOutbox()
+    {
+        var clock = new FakeClock(DateTimeOffset.UtcNow);
+        var slotId = SlotId.New();
+        var waiter = new WaitlistEntry(Guid.NewGuid(), PatientId.New(), new TestType("BloodTest"), clock.UtcNow);
+        var slots = new Mock<ISlotRepository>();
+        slots.Setup(repository => repository.GetByIdAsync(slotId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateSlot(slotId, clock.UtcNow));
+        slots.Setup(repository => repository.TryOfferAsync(slotId, waiter.PatientId, clock.UtcNow,
+                clock.UtcNow.AddMinutes(5), It.IsAny<CancellationToken>(), null))
+            .ReturnsAsync((Slot?)null);
+        var waitlist = new Mock<IWaitlistRepository>();
+        waitlist.Setup(repository => repository.GetNextAsync(waiter.TestType, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(waiter);
+        waitlist.Setup(repository => repository.TryClaimAsync(waiter.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        waitlist.Setup(repository => repository.TryRestoreClaimAsync(waiter.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var outbox = new Mock<IOutboxStore>(MockBehavior.Strict);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.ExecuteInline<bool>();
+        var handler = new OfferNextWaiterHandler(slots.Object, waitlist.Object, outbox.Object,
+            unitOfWork.Object, clock, new ApplicationServicesOptions());
+
+        var offered = await handler.Handle(new OfferNextWaiter(slotId.Value), CancellationToken.None);
+
+        Assert.IsFalse(offered);
+        waitlist.Verify(repository => repository.TryClaimAsync(waiter.Id, It.IsAny<CancellationToken>()), Times.Once);
+        waitlist.Verify(repository => repository.TryRestoreClaimAsync(waiter.Id, It.IsAny<CancellationToken>()),
+            Times.Once);
+        outbox.VerifyNoOtherCalls();
     }
 
     [TestMethod]

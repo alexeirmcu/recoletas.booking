@@ -1,7 +1,8 @@
-using Recoletas.Booking.Domain.Repository;
-using Recoletas.Booking.Domain.Services;
+using Recoletas.Booking.ApplicationServices.Abstractions;
+using Recoletas.Booking.ApplicationServices.Messaging;
 using Recoletas.Booking.Infrastructure.Clock;
 using Recoletas.Booking.Infrastructure.EfModel;
+using Recoletas.Booking.Infrastructure.Messaging;
 using Recoletas.Booking.Infrastructure.Notifications;
 using Recoletas.Booking.Infrastructure.Outbox;
 using Recoletas.Booking.Infrastructure.Repositories;
@@ -23,6 +24,7 @@ public static class InfrastructureServiceRegistration
         services.AddScoped<IPatientRepository, PatientRepository>();
         services.AddScoped<IWaitlistRepository, WaitlistRepository>();
         services.AddScoped<IAppointmentRepository, AppointmentRepository>();
+        services.AddScoped<IAdminAppointmentReadRepository, AdminAppointmentReadRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddSingleton<IConstraintViolationDetector, PostgresConstraintViolationDetector>();
 
@@ -38,6 +40,16 @@ public static class InfrastructureServiceRegistration
         ]));
         services.AddScoped<INotificationSender>(provider => provider.GetRequiredService<CompositeNotificationSender>());
 
+        return services;
+    }
+
+    public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, RabbitMqOptions options)
+    {
+        services.AddSingleton(options);
+        services.AddSingleton<RabbitMqConnection>();
+        services.AddSingleton<IEventDispatcher, RabbitMqDispatcher>();
+        services.AddSingleton<RabbitMqDeliveryHandler>();
+        services.AddHostedService<RabbitMqConsumersHostedService>();
         return services;
     }
 }

@@ -1,5 +1,5 @@
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Infrastructure.EfModel;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +13,24 @@ public sealed class SlotRepository(BookingDbContext dbContext) : ISlotRepository
 
     public async Task<IReadOnlyList<Slot>> ListAsync(CancellationToken cancellationToken) =>
         await dbContext.Slots.AsNoTracking().ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Slot>> ListPendingForPatientAsync(PatientId patientId,
+        DateTimeOffset nowUtc, CancellationToken cancellationToken)
+    {
+        var now = nowUtc.ToUniversalTime();
+        return await dbContext.Slots.AsNoTracking()
+            .Where(slot => slot.AssignedPatientId == patientId && slot.EndsAtUtc > now &&
+                           (slot.State == SlotState.Held && slot.HoldExpiresAtUtc != null &&
+                            slot.HoldExpiresAtUtc > now ||
+                            slot.State == SlotState.Offered && slot.OfferExpiresAtUtc != null &&
+                            slot.OfferExpiresAtUtc > now))
+            .OrderBy(slot => slot.State == SlotState.Held
+                ? slot.HoldExpiresAtUtc
+                : slot.OfferExpiresAtUtc)
+            .ThenBy(slot => slot.StartsAtUtc)
+            .ThenBy(slot => slot.Id)
+            .ToListAsync(cancellationToken);
+    }
 
     public async Task<Slot?> TryHoldAsync(SlotId id, PatientId patientId, DateTimeOffset nowUtc,
         DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
@@ -111,7 +129,7 @@ public sealed class SlotRepository(BookingDbContext dbContext) : ISlotRepository
     }
 
     public async Task<Slot?> TryOfferAsync(SlotId id, PatientId patientId, DateTimeOffset nowUtc,
-        DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
+        DateTimeOffset expiresAtUtc, CancellationToken cancellationToken, int? expectedGeneration = null)
     {
         var now = nowUtc.ToUniversalTime();
         var expiresAt = expiresAtUtc.ToUniversalTime();
@@ -128,7 +146,8 @@ public sealed class SlotRepository(BookingDbContext dbContext) : ISlotRepository
         }
 
         var updated = await dbContext.Slots.Where(candidate => candidate.Id == id &&
-                candidate.Generation == originalGeneration && candidate.EndsAtUtc > now &&
+                candidate.Generation == originalGeneration &&
+                (expectedGeneration == null || candidate.Generation == expectedGeneration) && candidate.EndsAtUtc > now &&
                 (candidate.State == SlotState.Available ||
                  candidate.State == SlotState.Held && candidate.HoldExpiresAtUtc <= now ||
                  candidate.State == SlotState.Offered && candidate.OfferExpiresAtUtc <= now))

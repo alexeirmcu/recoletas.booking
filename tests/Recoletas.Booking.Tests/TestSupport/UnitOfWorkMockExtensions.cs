@@ -1,5 +1,5 @@
 using Moq;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 
 namespace Recoletas.Booking.Tests.TestSupport;
 

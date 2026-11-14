@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="7.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.15" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
       <PrivateAssets>all</PrivateAssets>
@@ -17,6 +19,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Recoletas.Booking.ApplicationServices\Recoletas.Booking.ApplicationServices.csproj" />
     <ProjectReference Include="..\Recoletas.Booking.Domain\Recoletas.Booking.Domain.csproj" />
+    <ProjectReference Include="..\Recoletas.Booking.Contracts\Recoletas.Booking.Contracts.csproj" />
   </ItemGroup>
 </Project>

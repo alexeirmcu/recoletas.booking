@@ -8,31 +8,39 @@ A .NET 10 backend service that manages diagnostic-test appointments (slots, expi
 confirm/cancel, and an asynchronous waitlist with transactional-outbox notifications).
 Synthetic data only.
 
-## Architecture (Layered)
+## Architecture (Clean Architecture)
 
-Dependencies flow in one direction:
+Dependencies point inward; the API is the composition root:
 
 ```
-API → ApplicationServices → Infrastructure → Domain → Contracts
+API → ApplicationServices → Domain
+API → Infrastructure → ApplicationServices
+Infrastructure → Domain
+ApplicationServices → Contracts
+Infrastructure → Contracts
 ```
 
 | Project | Rules |
 |---|---|
 | `Recoletas.Booking.Contracts` | Zero package deps, zero project refs. Plain serializable records: integration events in `Events/`, shared models in `Models/`. |
-| `Recoletas.Booking.Domain` | Entities + value objects + slot state machine + ports. Only `Microsoft.Extensions.DependencyInjection.Abstractions` allowed. No EF Core, no MediatR. |
-| `Recoletas.Booking.Infrastructure` | EF Core + PostgreSQL (Npgsql). `Repositories/`, `Outbox/` (store), `Notifications/`. |
-| `Recoletas.Booking.ApplicationServices` | CQRS + MediatR + FluentValidation + workers + dispatcher. `Commands/`, `Handlers/`, `Validators/`, `Workers/`, `Outbox/`, `Messaging/`. |
-| `Recoletas.Booking.API` | Controllers only (`_mediator.Send()`). Composition root in `Program.cs`. |
+| `Recoletas.Booking.Domain` | Entities, value objects, state machine, and domain-owned events. Zero project/package refs; no EF Core, MediatR, DI abstractions, or integration Contracts. |
+| `Recoletas.Booking.ApplicationServices` | CQRS + MediatR + FluentValidation, use-case ports, workers, and event-to-contract mapping. References Domain and Contracts, never Infrastructure. |
+| `Recoletas.Booking.Infrastructure` | EF Core + PostgreSQL (Npgsql); implements application ports. `Repositories/`, `Outbox/`, `Notifications/`, and concrete message dispatch adapters. References ApplicationServices and Domain. |
+| `Recoletas.Booking.API` | Thin controllers (`_mediator.Send()`) and composition root in `Program.cs`; explicitly references ApplicationServices and Infrastructure. |
 
 ## Conventions
 
 - **Commands** have no `Command`/`Query` suffix (`BlockSlot`, not `BlockSlotCommand`); handlers are
   `<Command>Handler`; validators are FluentValidation `AbstractValidator<T>`.
 - **Controllers** are thin; responses use record types, never domain entities.
-- **Concurrency**: slot exclusivity is enforced in the DB with a conditional transactional
-  `UPDATE` + unique live-claim constraint. Never use in-memory locks as the source of truth.
-- **Outbox**: slot state change + outbox event are committed in the same transaction; delivery is
-  at-least-once with idempotent handlers and per-slot `generation` ordering.
+- **Concurrency**: slot exclusivity is enforced in the DB with conditional transactional updates
+  guarded by state, expiry, and `generation`. Never use in-memory locks as the source of truth.
+- **Outbox**: slot state change + outbox event are committed in the same transaction. Delivery is
+  at-least-once; state transitions are guarded for idempotency, but external notification side effects
+  may be repeated after a crash between sending and marking a message processed.
+- **Boundaries**: repository, unit-of-work, clock, outbox, notification, and dispatcher ports live in
+  ApplicationServices; Infrastructure implements them. Domain raises its own event records, which
+  ApplicationServices maps to integration Contracts events.
 - **Time**: UTC everywhere + injectable `IClock`.
 - **Tests**: MSTest + Moq, AAA, directory mirroring, `Method_Scenario_Expected` naming.
 - **Language**: all code, comments, and artifacts in English.

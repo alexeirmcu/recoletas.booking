@@ -3,11 +3,11 @@ schema: spec-driven
 context: |
   Project: recoletas; backend service for diagnostic test appointments (Recoletas.Booking).
   Stack: .NET 10 (net10.0), EF Core + PostgreSQL (Npgsql), CQRS + MediatR + FluentValidation, ASP.NET Core controllers + Swagger.
-  Architecture: Layered — API → ApplicationServices → Infrastructure → Domain → Contracts (five projects, transitive references).
+  Architecture: Clean Architecture — API composes ApplicationServices and Infrastructure; ApplicationServices depends on Domain and Contracts; Infrastructure implements application ports and depends on ApplicationServices and Domain; Domain and Contracts have no project dependencies.
   Requirements context: appointment slots, temporary holds, confirm/cancel, concurrency-safe booking, and asynchronous waitlist notifications.
   Data constraint: synthetic data only.
   Environment: .NET 10 target framework (build with SDK 10 or later) + Docker (PostgreSQL via docker compose).
-  Repository: git (clean init + first commit pending).
+  Repository: git.
 
 strict_tdd: false
 

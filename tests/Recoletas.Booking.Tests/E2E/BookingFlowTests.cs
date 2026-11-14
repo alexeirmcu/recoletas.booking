@@ -2,20 +2,23 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Recoletas.Booking.Contracts.Models;
+using Recoletas.Booking.Contracts.Events;
 using Recoletas.Booking.Domain.Entities;
 using Recoletas.Booking.Domain.ValueObjects;
+using Recoletas.Booking.ApplicationServices.Handlers;
 using Recoletas.Booking.Infrastructure.EfModel;
+using Recoletas.Booking.Infrastructure.Messaging;
 using Recoletas.Booking.Tests.TestSupport;
 
 namespace Recoletas.Booking.Tests.E2E;
 
 [TestClass]
 [TestCategory("E2E")]
-[DoNotParallelize]
 public sealed class BookingFlowTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -23,12 +26,14 @@ public sealed class BookingFlowTests
     [TestMethod]
     public async Task HoldThenConfirm_AuthenticatedPatient_ReceivesConfirmedAppointment()
     {
-        await PostgresTestDatabase.EnsureAvailableAsync();
-        using var factory = CreateFactory();
+        var connectionString = PostgresTestDatabase.CreateScenarioConnectionString("holdconfirm");
+        await PostgresTestDatabase.EnsureAvailableAsync(connectionString);
+        using var factory = CreateFactory(connectionString);
         using var client = factory.CreateClient();
         var patientId = await RegisterPatientAsync(client);
         var slotId = await AddFutureSlotAsync(factory);
-        client.DefaultRequestHeaders.Add("X-Patient-Id", patientId.ToString());
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", TestJwtTokens.CreatePatientToken(patientId));
 
         var holdResponse = await client.PostAsync($"/slots/{slotId}/hold", content: null);
         holdResponse.EnsureSuccessStatusCode();
@@ -41,11 +46,59 @@ public sealed class BookingFlowTests
             new { generation = holdResult.Generation.Value }, JsonOptions);
         confirmResponse.EnsureSuccessStatusCode();
         var appointment = await confirmResponse.Content.ReadFromJsonAsync<AppointmentSummary>(JsonOptions);
+        var appointmentsResponse = await client.GetAsync("/appointments");
+        appointmentsResponse.EnsureSuccessStatusCode();
+        var appointments = await appointmentsResponse.Content.ReadFromJsonAsync<AppointmentSummary[]>(JsonOptions);
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+        var slot = await context.Slots.AsNoTracking().SingleAsync(candidate => candidate.Id == new SlotId(slotId));
 
         Assert.IsNotNull(appointment);
         Assert.AreEqual(slotId, appointment.SlotId);
         Assert.AreEqual(patientId, appointment.PatientId);
         Assert.AreEqual("BloodTest", appointment.TestType);
+        Assert.AreEqual(slot.StartsAtUtc, appointment.StartsAtUtc);
+        Assert.AreEqual(slot.EndsAtUtc, appointment.EndsAtUtc);
+        Assert.IsNotNull(appointments);
+        Assert.AreEqual(1, appointments.Length);
+        Assert.AreEqual(appointment.ReservationId, appointments[0].ReservationId);
+        Assert.AreEqual(slot.StartsAtUtc, appointments[0].StartsAtUtc);
+        Assert.AreEqual(slot.EndsAtUtc, appointments[0].EndsAtUtc);
+    }
+
+    [TestMethod]
+    public async Task PendingHold_ReadGenerationAndConfirm_RemovesItemFromPendingResults()
+    {
+        var connectionString = PostgresTestDatabase.CreateScenarioConnectionString("pendingflow");
+        await PostgresTestDatabase.EnsureAvailableAsync(connectionString);
+        using var factory = CreateFactory(connectionString);
+        using var client = factory.CreateClient();
+        var patientId = await RegisterPatientAsync(client);
+        var slotId = await AddFutureSlotAsync(factory);
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", TestJwtTokens.CreatePatientToken(patientId));
+
+        var holdResponse = await client.PostAsync($"/slots/{slotId}/hold", content: null);
+        holdResponse.EnsureSuccessStatusCode();
+        var hold = await holdResponse.Content.ReadFromJsonAsync<BookingResult>(JsonOptions);
+        Assert.IsNotNull(hold?.Generation);
+
+        var pendingResponse = await client.GetAsync("/appointments/pending");
+        pendingResponse.EnsureSuccessStatusCode();
+        var pending = await pendingResponse.Content.ReadFromJsonAsync<PendingAppointmentSummary[]>(JsonOptions);
+        Assert.IsNotNull(pending);
+        Assert.AreEqual(1, pending.Length);
+        Assert.AreEqual(slotId, pending[0].SlotId);
+        Assert.AreEqual("hold", pending[0].Kind);
+        Assert.AreEqual(hold.Generation.Value, pending[0].Generation);
+
+        var confirmResponse = await client.PostAsJsonAsync($"/holds/{slotId}/confirm",
+            new { generation = pending[0].Generation }, JsonOptions);
+        confirmResponse.EnsureSuccessStatusCode();
+        var afterConfirmation = await client.GetAsync("/appointments/pending");
+        afterConfirmation.EnsureSuccessStatusCode();
+
+        Assert.AreEqual("[]", await afterConfirmation.Content.ReadAsStringAsync());
     }
 
     [TestMethod]
@@ -77,15 +130,17 @@ public sealed class BookingFlowTests
     [TestMethod]
     public async Task WaitlistReleaseOfferAccept_WaiterReceivesAppointment()
     {
-        await PostgresTestDatabase.EnsureAvailableAsync();
-        using var factory = CreateFactory();
+        var connectionString = PostgresTestDatabase.CreateScenarioConnectionString("waitliste2e");
+        await PostgresTestDatabase.EnsureAvailableAsync(connectionString);
+        using var factory = CreateFactory(connectionString);
         using var ownerClient = factory.CreateClient();
         using var waiterClient = factory.CreateClient();
         var ownerId = await RegisterPatientAsync(ownerClient);
         var waiterId = await RegisterPatientAsync(waiterClient);
         var slotId = await AddFutureSlotAsync(factory);
 
-        ownerClient.DefaultRequestHeaders.Add("X-Patient-Id", ownerId.ToString());
+        ownerClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", TestJwtTokens.CreatePatientToken(ownerId));
         var holdResponse = await ownerClient.PostAsync($"/slots/{slotId}/hold", content: null);
         holdResponse.EnsureSuccessStatusCode();
         var hold = await holdResponse.Content.ReadFromJsonAsync<BookingResult>(JsonOptions);
@@ -96,7 +151,8 @@ public sealed class BookingFlowTests
         var ownerAppointment = await confirmResponse.Content.ReadFromJsonAsync<AppointmentSummary>(JsonOptions);
         Assert.IsNotNull(ownerAppointment);
 
-        waiterClient.DefaultRequestHeaders.Add("X-Patient-Id", waiterId.ToString());
+        waiterClient.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", TestJwtTokens.CreatePatientToken(waiterId));
         var joinResponse = await waiterClient.PostAsJsonAsync("/waitlist", new { testType = "BloodTest" },
             JsonOptions);
         joinResponse.EnsureSuccessStatusCode();
@@ -104,50 +160,57 @@ public sealed class BookingFlowTests
         var cancelResponse = await ownerClient.PostAsync(
             $"/appointments/{ownerAppointment.ReservationId}/cancel", content: null);
         Assert.AreEqual(System.Net.HttpStatusCode.NoContent, cancelResponse.StatusCode);
-        var offerGeneration = await WaitForOfferAsync(factory, slotId);
+        await DispatchSlotReleasedEventAsync(factory, slotId);
+        var offerGeneration = await WaitForOfferAsync(factory, slotId, waiterId);
+
+        var pendingResponse = await waiterClient.GetAsync("/appointments/pending");
+        pendingResponse.EnsureSuccessStatusCode();
+        var pending = await pendingResponse.Content.ReadFromJsonAsync<PendingAppointmentSummary[]>(JsonOptions);
+        Assert.IsNotNull(pending);
+        var offeredSlot = pending.Single(item => item.SlotId == slotId);
+        Assert.AreEqual("offer", offeredSlot.Kind);
+        Assert.AreEqual(offerGeneration, offeredSlot.Generation);
 
         var acceptResponse = await waiterClient.PostAsJsonAsync($"/offers/{slotId}/accept",
-            new { generation = offerGeneration }, JsonOptions);
+            new { generation = offeredSlot.Generation }, JsonOptions);
         acceptResponse.EnsureSuccessStatusCode();
         var waiterAppointment = await acceptResponse.Content.ReadFromJsonAsync<AppointmentSummary>(JsonOptions);
+        var afterAcceptanceResponse = await waiterClient.GetAsync("/appointments/pending");
+        afterAcceptanceResponse.EnsureSuccessStatusCode();
+        var afterAcceptance = await afterAcceptanceResponse.Content
+            .ReadFromJsonAsync<PendingAppointmentSummary[]>(JsonOptions);
 
         Assert.IsNotNull(waiterAppointment);
         Assert.AreEqual(slotId, waiterAppointment.SlotId);
         Assert.AreEqual(waiterId, waiterAppointment.PatientId);
         Assert.AreNotEqual(ownerAppointment.ReservationId, waiterAppointment.ReservationId);
+        Assert.IsNotNull(afterAcceptance);
+        Assert.IsFalse(afterAcceptance.Any(item => item.SlotId == slotId));
     }
 
     private static WebApplicationFactory<Program> CreateFactory()
     {
-        var testConnectionString = PostgresTestDatabase.ConnectionString;
-        var previousConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Booking");
-        WebApplicationFactory<Program>? factory = null;
-        Environment.SetEnvironmentVariable("ConnectionStrings__Booking", testConnectionString);
-        try
-        {
-            factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            {
-                builder.UseEnvironment("Development");
-                builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-                    new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:Booking"] = testConnectionString
-                    }));
-            });
+        return CreateFactory(PostgresTestDatabase.ConnectionString);
+    }
 
-            // Force host startup while the bootstrap environment variable is set, then restore it.
-            _ = factory.Services;
-            return factory;
-        }
-        catch
+    private static WebApplicationFactory<Program> CreateFactory(string testConnectionString)
+    {
+        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            factory?.Dispose();
-            throw;
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("ConnectionStrings__Booking", previousConnectionString);
-        }
+            builder.UseEnvironment("Testing");
+            builder.UseSetting("Jwt:Secret", TestJwtTokens.Secret);
+            builder.UseSetting("Jwt:Issuer", TestJwtTokens.Issuer);
+            builder.UseSetting("Jwt:Audience", TestJwtTokens.Audience);
+            builder.UseSetting("ConnectionStrings:Booking", testConnectionString);
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:Booking"] = testConnectionString,
+                    ["Jwt:Secret"] = TestJwtTokens.Secret,
+                    ["Jwt:Issuer"] = TestJwtTokens.Issuer,
+                    ["Jwt:Audience"] = TestJwtTokens.Audience
+                }));
+        });
     }
 
     private static async Task<Guid> RegisterPatientAsync(HttpClient client)
@@ -169,7 +232,8 @@ public sealed class BookingFlowTests
         return slotId.Value;
     }
 
-    private static async Task<int> WaitForOfferAsync(WebApplicationFactory<Program> factory, Guid slotId)
+    private static async Task<int> WaitForOfferAsync(WebApplicationFactory<Program> factory, Guid slotId,
+        Guid expectedPatientId)
     {
         var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
         while (DateTimeOffset.UtcNow < deadline)
@@ -179,6 +243,8 @@ public sealed class BookingFlowTests
             var slot = await context.Slots.AsNoTracking().SingleAsync(candidate => candidate.Id == new SlotId(slotId));
             if (slot.State == SlotState.Offered)
             {
+                Assert.AreEqual(new PatientId(expectedPatientId), slot.AssignedPatientId,
+                    "The released slot was offered to a different waitlist patient.");
                 return slot.Generation;
             }
 
@@ -187,5 +253,23 @@ public sealed class BookingFlowTests
 
         Assert.Fail("The released slot was not offered to the waitlisted patient before the timeout.");
         return 0;
+    }
+
+    private static async Task DispatchSlotReleasedEventAsync(WebApplicationFactory<Program> factory, Guid slotId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<BookingDbContext>();
+        var record = await context.OutboxMessages.AsNoTracking().SingleAsync(message =>
+            message.EventType == BookingEventTypes.SlotReleased &&
+            message.Payload.Contains(slotId.ToString()));
+        var message = new OutboxMessage(record.Id, record.EventType, record.Payload, record.OccurredAtUtc);
+        if (BookingEventSerializer.Deserialize(message) is not SlotReleased released)
+        {
+            Assert.Fail("The slot release outbox record did not deserialize to SlotReleased.");
+            return;
+        }
+
+        await scope.ServiceProvider.GetRequiredService<SlotReleasedEventHandler>()
+            .HandleAsync(released, CancellationToken.None);
     }
 }

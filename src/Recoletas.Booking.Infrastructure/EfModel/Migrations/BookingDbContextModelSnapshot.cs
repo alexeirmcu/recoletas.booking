@@ -180,6 +180,9 @@ namespace Recoletas.Booking.Infrastructure.EfModel.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("LeaseUntilUtc")
                         .HasColumnType("timestamp with time zone");
 

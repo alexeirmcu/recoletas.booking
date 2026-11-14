@@ -1,4 +1,4 @@
-using Recoletas.Booking.Domain.Services;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 
 namespace Recoletas.Booking.Infrastructure.Clock;
 

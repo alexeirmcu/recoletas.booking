@@ -5,7 +5,7 @@ using Recoletas.Booking.ApplicationServices.Handlers;
 using Recoletas.Booking.Contracts.Events;
 using Recoletas.Booking.Contracts.Models;
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 using Recoletas.Booking.Tests.TestSupport;
 
@@ -51,6 +51,9 @@ public sealed class AcceptOfferHandlerTests
 
         Assert.IsTrue(result.Succeeded);
         Assert.AreEqual(reservation.Id, result.Appointment?.ReservationId);
+        Assert.AreEqual(slot.StartsAtUtc, result.Appointment?.StartsAtUtc);
+        Assert.AreEqual(slot.EndsAtUtc, result.Appointment?.EndsAtUtc);
+        Assert.AreEqual(reservation.ConfirmedAtUtc, result.Appointment?.ConfirmedAtUtc);
         waitlist.Verify(repository => repository.RemoveAsync(entry.Id, It.IsAny<CancellationToken>()), Times.Once);
         outbox.Verify(store => store.EnqueueAsync(It.Is<AppointmentConfirmed>(item =>
             item.ReservationId == reservation.Id), It.IsAny<CancellationToken>()), Times.Once);

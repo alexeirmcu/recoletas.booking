@@ -2,7 +2,7 @@ using Moq;
 using Recoletas.Booking.ApplicationServices.Commands;
 using Recoletas.Booking.ApplicationServices.Handlers;
 using Recoletas.Booking.Domain.Entities;
-using Recoletas.Booking.Domain.Repository;
+using Recoletas.Booking.ApplicationServices.Abstractions;
 using Recoletas.Booking.Domain.ValueObjects;
 
 namespace Recoletas.Booking.Tests.Recoletas.Booking.ApplicationServices.Handlers;
@@ -35,5 +35,8 @@ public sealed class QueryAppointmentsHandlerTests
 
         Assert.AreEqual(1, result.Count);
         Assert.AreEqual(validReservation.Id, result[0].ReservationId);
+        Assert.AreEqual(validSlot.StartsAtUtc, result[0].StartsAtUtc);
+        Assert.AreEqual(validSlot.EndsAtUtc, result[0].EndsAtUtc);
+        Assert.AreEqual(validReservation.ConfirmedAtUtc, result[0].ConfirmedAtUtc);
     }
 }

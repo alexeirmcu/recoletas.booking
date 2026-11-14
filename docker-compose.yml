@@ -1,4 +1,23 @@
 services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    container_name: recoletas-booking-rabbitmq
+    restart: unless-stopped
+    environment:
+      # Synthetic local demo credentials only; never use these outside local development.
+      RABBITMQ_DEFAULT_USER: booking_demo
+      RABBITMQ_DEFAULT_PASS: booking_demo
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   db:
     image: postgres:16-alpine
     container_name: recoletas-booking-db
@@ -29,3 +48,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  rabbitmq_data:

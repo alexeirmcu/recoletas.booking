@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Recoletas.Booking.Infrastructure.EfModel;
+using System.Net.Sockets;
 
 namespace Recoletas.Booking.Tests.TestSupport;
 
@@ -45,11 +46,36 @@ public static class PostgresTestDatabase
     }
 
     public static DbContextOptions<BookingDbContext> CreateOptions() =>
-        new DbContextOptionsBuilder<BookingDbContext>().UseNpgsql(ConnectionString).Options;
+        CreateOptions(ConnectionString);
 
-    public static async Task EnsureAvailableAsync()
+    public static DbContextOptions<BookingDbContext> CreateOptions(string connectionString)
     {
-        var connectionString = ConnectionString;
+        ValidateDedicatedConnectionString(connectionString);
+        return new DbContextOptionsBuilder<BookingDbContext>().UseNpgsql(connectionString).Options;
+    }
+
+    public static string CreateScenarioConnectionString(string scenarioName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scenarioName);
+        if (scenarioName.Length > 15 || scenarioName.Any(character =>
+                character is not (>= 'a' and <= 'z') and not (>= '0' and <= '9')))
+        {
+            throw new ArgumentException("Scenario names must be lowercase alphanumeric and at most 15 characters.",
+                nameof(scenarioName));
+        }
+
+        var builder = new NpgsqlConnectionStringBuilder(ConnectionString)
+        {
+            Database = $"bookingtest_{scenarioName}_{Guid.NewGuid():N}"
+        };
+        return builder.ConnectionString;
+    }
+
+    public static Task EnsureAvailableAsync() => EnsureAvailableAsync(ConnectionString);
+
+    public static async Task EnsureAvailableAsync(string connectionString)
+    {
+        ValidateDedicatedConnectionString(connectionString);
         var targetBuilder = new NpgsqlConnectionStringBuilder(connectionString);
 
         await InitializationLock.WaitAsync();
@@ -60,12 +86,10 @@ public static class PostgresTestDatabase
             await using var context = new BookingDbContext(
                 new DbContextOptionsBuilder<BookingDbContext>().UseNpgsql(connectionString).Options);
             await MigrateWithAdvisoryLockAsync(context);
+            await new BookingDatabaseInitializer(context, new FakeClock(DateTimeOffset.UtcNow))
+                .InitializeAsync(seedDemoData: false);
         }
-        catch (AssertInconclusiveException)
-        {
-            throw;
-        }
-        catch (Exception exception)
+        catch (Exception exception) when (IsPostgresUnavailable(exception))
         {
             Assert.Inconclusive($"PostgreSQL integration tests could not initialize the database: {exception.Message}");
         }
@@ -159,4 +183,37 @@ public static class PostgresTestDatabase
     }
 
     private static string QuoteIdentifier(string identifier) => $"\"{identifier.Replace("\"", "\"\"")}\"";
+
+    private static void ValidateDedicatedConnectionString(string connectionString)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        if (string.Equals(builder.Database, "recoletas", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "PostgreSQL tests must target a dedicated test database, not 'recoletas'.");
+        }
+    }
+
+    private static bool IsPostgresUnavailable(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException!)
+        {
+            if (current is SocketException or TimeoutException or IOException)
+            {
+                return true;
+            }
+
+            if (current is PostgresException postgresException &&
+                (postgresException.SqlState.StartsWith("08", StringComparison.Ordinal) ||
+                 postgresException.SqlState is PostgresErrorCodes.AdminShutdown or
+                     PostgresErrorCodes.CrashShutdown or PostgresErrorCodes.CannotConnectNow or
+                     PostgresErrorCodes.TooManyConnections))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
