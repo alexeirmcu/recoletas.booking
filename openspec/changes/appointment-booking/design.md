@@ -171,9 +171,9 @@ Outbox leases carry an acquisition identity. Completion and failure updates must
 unexpired acquisition; a stale owner cannot overwrite another worker's state. Broker publication
 still requires confirmation, and lease fencing does not provide exactly-once publication.
 
-Wire event identifiers are explicit and versioned, independent of CLR type renames. Deserialization
-supports existing unversioned identifiers so persisted and queued historical events remain readable.
-Unknown identifiers fail explicitly rather than being silently acknowledged.
+Wire event identifiers are explicit and versioned, independent of CLR type renames. Only the
+versioned identifiers are supported. Unknown identifiers fail explicitly rather than being silently
+acknowledged.
 
 `IEventDispatcher` and `INotificationSender` are application-owned ports in
 `Recoletas.Booking.ApplicationServices.Messaging`; Infrastructure provides their implementations.
@@ -230,9 +230,9 @@ schema/data migration; an additive lease-ownership migration is not a replacemen
 Do not delete existing tables or fabricate migration-history rows to make startup pass. Validation
 against a fresh, separately named test database does not repair or certify an older database.
 
-Deploy compatible readers and additive broker bindings before switching producers to versioned
-identifiers. The new reader can consume legacy names, but that does not make an older binary able
-to consume new identifiers. Existing queues and messages must not be deleted to deploy this change.
+Fresh broker topologies bind only versioned identifiers. Existing broker bindings are not removed
+automatically by redeclaring topology; inspect any existing messages and remove obsolete bindings or
+provision a fresh dedicated vhost before deploying.
 
 ## Open Questions
 

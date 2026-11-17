@@ -9,11 +9,11 @@ namespace Recoletas.Booking.Tests.Recoletas.Booking.Infrastructure.Messaging;
 public sealed class BookingEventSerializerTests
 {
     [TestMethod]
-    public void Deserialize_LegacyOutboxTypeAndPayload_RemainsReadable()
+    public void Deserialize_VersionedOutboxTypeAndPayload_ReturnsEvent()
     {
         var eventId = Guid.NewGuid();
         var slotId = Guid.NewGuid();
-        var message = new OutboxMessage(eventId, BookingEventTypes.LegacySlotReleased,
+        var message = new OutboxMessage(eventId, BookingEventTypes.SlotReleased,
             $"{{\"eventId\":\"{eventId}\",\"slotId\":\"{slotId}\",\"testType\":\"BloodTest\",\"generation\":7," +
             "\"occurredAtUtc\":\"2030-01-01T12:00:00+00:00\"}",
             DateTimeOffset.Parse("2030-01-01T12:00:00Z"));
@@ -25,10 +25,21 @@ public sealed class BookingEventSerializerTests
         Assert.AreEqual(eventId, released!.EventId);
         Assert.AreEqual(slotId, released.SlotId);
         Assert.AreEqual(7, released.Generation);
-        Assert.AreEqual(BookingEventTypes.LegacySlotReleased,
-            RabbitMqTopology.RoutingKey(BookingEventTypes.LegacySlotReleased));
         Assert.AreEqual(BookingEventTypes.SlotReleased,
             RabbitMqTopology.RoutingKey(BookingEventTypes.SlotReleased));
+    }
+
+    [DataTestMethod]
+    [DataRow("SlotReleased")]
+    [DataRow("HoldConfirmationRequested")]
+    [DataRow("OfferCreated")]
+    [DataRow("AppointmentConfirmed")]
+    public void Deserialize_UnversionedEventType_RejectsIdentifier(string eventType)
+    {
+        var message = new OutboxMessage(Guid.NewGuid(), eventType, "{}", DateTimeOffset.UtcNow);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => BookingEventSerializer.Deserialize(message));
+        Assert.ThrowsExactly<InvalidOperationException>(() => RabbitMqTopology.RoutingKey(eventType));
     }
 
     [TestMethod]

@@ -12,9 +12,7 @@ public static class RabbitMqTopology
     public static string RoutingKey(string eventType) => eventType switch
     {
         BookingEventTypes.SlotReleased or BookingEventTypes.HoldConfirmationRequested or
-            BookingEventTypes.OfferCreated or BookingEventTypes.AppointmentConfirmed or
-            BookingEventTypes.LegacySlotReleased or BookingEventTypes.LegacyHoldConfirmationRequested or
-            BookingEventTypes.LegacyOfferCreated or BookingEventTypes.LegacyAppointmentConfirmed => eventType,
+            BookingEventTypes.OfferCreated or BookingEventTypes.AppointmentConfirmed => eventType,
         _ => throw new InvalidOperationException($"Unsupported booking event '{eventType}'.")
     };
 
@@ -46,19 +44,11 @@ public static class RabbitMqTopology
                 }, cancellationToken: token);
         }
 
-        foreach (var key in new[]
-                 {
-                     BookingEventTypes.LegacySlotReleased, BookingEventTypes.SlotReleased
-                 })
-        {
-            await channel.QueueBindAsync(WorkflowQueue, Exchange, key, cancellationToken: token);
-        }
+        await channel.QueueBindAsync(WorkflowQueue, Exchange, BookingEventTypes.SlotReleased,
+            cancellationToken: token);
 
         foreach (var key in new[]
                  {
-                     BookingEventTypes.LegacyHoldConfirmationRequested,
-                     BookingEventTypes.LegacyOfferCreated,
-                     BookingEventTypes.LegacyAppointmentConfirmed,
                      BookingEventTypes.HoldConfirmationRequested,
                      BookingEventTypes.OfferCreated,
                      BookingEventTypes.AppointmentConfirmed

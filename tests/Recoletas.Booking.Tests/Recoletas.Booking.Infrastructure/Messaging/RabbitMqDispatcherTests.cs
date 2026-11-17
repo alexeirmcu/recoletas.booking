@@ -20,10 +20,6 @@ public sealed class RabbitMqDispatcherTests
     [DataRow(BookingEventTypes.HoldConfirmationRequested)]
     [DataRow(BookingEventTypes.OfferCreated)]
     [DataRow(BookingEventTypes.AppointmentConfirmed)]
-    [DataRow(BookingEventTypes.LegacySlotReleased)]
-    [DataRow(BookingEventTypes.LegacyHoldConfirmationRequested)]
-    [DataRow(BookingEventTypes.LegacyOfferCreated)]
-    [DataRow(BookingEventTypes.LegacyAppointmentConfirmed)]
     public async Task Publish_KnownEvent_UsesPersistentMandatoryPublicationAndEventId(string eventType)
     {
         var message = new OutboxMessage(Guid.NewGuid(), eventType, "{\"value\":1}", DateTimeOffset.UtcNow);
@@ -47,7 +43,7 @@ public sealed class RabbitMqDispatcherTests
     [TestMethod]
     public async Task ProcessBatch_PublishConfirmationFailure_RecordsRetryWithoutMarkingProcessed()
     {
-        var message = new OutboxMessage(Guid.NewGuid(), "SlotReleased", "{}", DateTimeOffset.UtcNow);
+        var message = new OutboxMessage(Guid.NewGuid(), BookingEventTypes.SlotReleased, "{}", DateTimeOffset.UtcNow);
         var channel = new Mock<IChannel>();
         channel.Setup(c => c.BasicPublishAsync(It.IsAny<string>(), It.IsAny<string>(), true,
                 It.IsAny<BasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>(), It.IsAny<CancellationToken>()))
@@ -73,7 +69,7 @@ public sealed class RabbitMqDispatcherTests
     [TestMethod]
     public async Task ProcessBatch_PendingConfirmation_MarksProcessedOnlyAfterConfirmation()
     {
-        var message = new OutboxMessage(Guid.NewGuid(), "SlotReleased", "{}", DateTimeOffset.UtcNow);
+        var message = new OutboxMessage(Guid.NewGuid(), BookingEventTypes.SlotReleased, "{}", DateTimeOffset.UtcNow);
         var channel = new Mock<IChannel>();
         var confirmation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         channel.Setup(c => c.BasicPublishAsync(It.IsAny<string>(), It.IsAny<string>(), true,

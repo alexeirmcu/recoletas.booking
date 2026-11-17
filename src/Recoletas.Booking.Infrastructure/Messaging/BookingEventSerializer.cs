@@ -14,11 +14,7 @@ public static class BookingEventSerializer
         [BookingEventTypes.HoldConfirmationRequested] = typeof(HoldConfirmationRequested),
         [BookingEventTypes.SlotReleased] = typeof(SlotReleased),
         [BookingEventTypes.OfferCreated] = typeof(OfferCreated),
-        [BookingEventTypes.AppointmentConfirmed] = typeof(AppointmentConfirmed),
-        [BookingEventTypes.LegacyHoldConfirmationRequested] = typeof(HoldConfirmationRequested),
-        [BookingEventTypes.LegacySlotReleased] = typeof(SlotReleased),
-        [BookingEventTypes.LegacyOfferCreated] = typeof(OfferCreated),
-        [BookingEventTypes.LegacyAppointmentConfirmed] = typeof(AppointmentConfirmed)
+        [BookingEventTypes.AppointmentConfirmed] = typeof(AppointmentConfirmed)
     };
 
     public static object Deserialize(OutboxMessage message)

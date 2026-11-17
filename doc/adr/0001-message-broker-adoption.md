@@ -67,7 +67,7 @@ Booking transaction -> PostgreSQL outbox -> polling publisher -> booking.events 
 
 ### Stable event identifiers and rollout
 
-New event types and routing keys are explicit wire identifiers:
+Event types and routing keys are explicit wire identifiers:
 
 | Contract | Type / routing key |
 |---|---|
@@ -76,15 +76,12 @@ New event types and routing keys are explicit wire identifiers:
 | OfferCreated | `booking.offer-created.v1` |
 | AppointmentConfirmed | `booking.appointment-confirmed.v1` |
 
-`BookingEventSerializer` accepts both these identifiers and the previous unversioned class-name
-identifiers. The topology retains legacy bindings alongside the versioned bindings; existing outbox
-rows are not rewritten. Unsupported identifiers fail explicitly.
-
-Compatibility is directional: new consumers can read historical messages, but old consumers cannot
-read the new identifiers. Upgrade all consumers before switching producers. Because both roles are
-hosted in the same API binary, do not assume an uncoordinated rolling deployment is safe; coordinate
-the upgrade so old consumers cannot receive versioned events. No queue deletion or argument change
-is needed for these additional bindings.
+Only these versioned identifiers are supported; unversioned class names fail explicitly. Fresh
+broker topologies bind only the versioned keys. RabbitMQ does not remove existing bindings when
+they are omitted from a declaration: if a broker was previously used with unversioned bindings,
+remove those bindings or provision a fresh dedicated vhost before using this version. Any existing
+unversioned outbox records and queued messages are unsupported; inspect them before removing or
+recreating broker resources, since deleting queues or a vhost discards their messages.
 
 ### Delivery semantics
 

@@ -57,16 +57,15 @@ confirmation remains necessary but does not grant ownership of a lease.
 ### Requirement: Stable Event Contracts
 
 Persisted event identifiers and routing keys MUST be explicit, stable wire identifiers rather than
-CLR type names inferred with `nameof`. The consumer MUST support the existing unversioned event
-names as compatibility aliases. Unsupported identifiers MUST fail explicitly. EventId/MessageId
+CLR type names inferred with `nameof`. Only versioned identifiers are supported; unversioned event
+names MUST be rejected. Unsupported identifiers MUST fail explicitly. EventId/MessageId
 MUST remain unchanged across publication and retry.
 
-#### Scenario: Previously persisted event is dispatched after an upgrade
+#### Scenario: Unversioned event identifier is rejected
 
-- GIVEN an outbox record or queued message using an existing unversioned event name
-- WHEN the upgraded publisher or consumer processes it
-- THEN it resolves to the corresponding supported event contract
-- AND its original event ID is preserved
+- GIVEN an outbox record or queued message using an unversioned event name
+- WHEN the publisher or consumer processes it
+- THEN the identifier is rejected explicitly
 
 ### Requirement: Retry and Dead-Letter
 
