@@ -145,7 +145,8 @@ dotnet test tests/Recoletas.Booking.Tests --filter "TestCategory=Unit&FullyQuali
 
 The opt-in `RabbitMqTransportTests` uses a **dedicated empty test vhost**, not the application's `/`.
 Create that vhost and grant a test user access, then set `RabbitMqTests__VirtualHost`,
-`RabbitMqTests__UserName`, `RabbitMqTests__Password` (optionally `RabbitMqTests__HostName`).
+`RabbitMqTests__UserName`, `RabbitMqTests__Password` (optionally `RabbitMqTests__HostName` and
+`RabbitMqTests__Port`).
 Run with `--filter FullyQualifiedName~RabbitMqTransportTests`. Without the vhost setting it is
 explicitly inconclusive. The test declares the same topology with a short retry TTL; never point it
 at a vhost containing application queues.
@@ -321,10 +322,8 @@ Outbox completion and failure updates are fenced by lease acquisition ownership.
 cannot overwrite the state of a newer lease owner; this does not remove the possible duplicate
 publication between broker confirmation and recording completion.
 
-Event wire identifiers are explicit and versioned, independent of CLR class names. Upgraded readers
-also accept the previous unversioned identifiers. This is backward reading compatibility, not a
-promise that an older binary can consume new event identifiers; coordinate consumer/producer upgrades.
-The exact identifiers and deployment restrictions are listed in
+Event wire identifiers are explicit and versioned, independent of CLR class names. Only the versioned
+identifiers are supported. The exact identifiers and deployment considerations are listed in
 [ADR-0001](doc/adr/0001-message-broker-adoption.md#stable-event-identifiers-and-rollout).
 
 The additive `20261114094732_OutboxLeaseFencing` migration adds nullable UUID `LeaseToken` without

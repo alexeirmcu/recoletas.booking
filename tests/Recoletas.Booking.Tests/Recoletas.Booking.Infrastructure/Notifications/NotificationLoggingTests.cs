@@ -18,7 +18,7 @@ public sealed class NotificationLoggingTests
         const string recipient = "patient-recipient@example.invalid";
         const string subject = "PRIVATE SUBJECT";
         const string body = "PRIVATE NOTIFICATION BODY";
-        var notification = new NotificationRequest(eventId, "HoldConfirmationRequested", recipient, subject,
+        var notification = new NotificationRequest(eventId, BookingEventTypes.HoldConfirmationRequested, recipient, subject,
             $"{body} {patientId} {nhc}");
         var logLogger = new CapturingLogger<LogNotificationSender>();
         var webhookLogger = new CapturingLogger<WebhookNotificationSender>();
@@ -31,7 +31,7 @@ public sealed class NotificationLoggingTests
         foreach (var entry in logLogger.Entries.Concat(webhookLogger.Entries))
         {
             StringAssert.Contains(entry.Text, eventId.ToString());
-            StringAssert.Contains(entry.Text, "HoldConfirmationRequested");
+            StringAssert.Contains(entry.Text, BookingEventTypes.HoldConfirmationRequested);
             Assert.IsFalse(entry.Text.Contains(patientId.ToString(), StringComparison.Ordinal));
             Assert.IsFalse(entry.Text.Contains(nhc, StringComparison.Ordinal));
             Assert.IsFalse(entry.Text.Contains(recipient, StringComparison.Ordinal));

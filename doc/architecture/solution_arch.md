@@ -254,7 +254,7 @@ Infrastructure/
 │   ├── RabbitMqConnection.cs     # shared connection, isolated confirm-enabled channels
 │   ├── RabbitMqTopology.cs       # durable direct exchange and quorum queues
 │   ├── RabbitMqOptions.cs
-│   └── BookingEventSerializer.cs # stable wire identifiers and legacy deserialization
+│   └── BookingEventSerializer.cs # stable versioned wire identifiers
 ├── Clock/SystemClock.cs
 └── InfrastructureServiceRegistration.cs   # AddInfrastructure(connectionString)
 ```
@@ -497,9 +497,8 @@ an expired acquisition must be recovered rather than recorded as successfully co
 
 The explicit wire identifiers and routing keys are `booking.hold-confirmation-requested.v1`,
 `booking.slot-released.v1`, `booking.offer-created.v1`, and `booking.appointment-confirmed.v1`.
-Readers and bindings retain the legacy unversioned event names. Stored historical rows are not
-rewritten. Old binaries cannot read the new identifiers: upgrade consumers before publishing the
-new format, coordinating deployment because publisher and consumers share the API host.
+Only these versioned identifiers are supported. New broker topologies bind only these routing keys;
+removing bindings from the declaration does not remove previously created bindings from an existing broker.
 
 See `doc/adr/0001-message-broker-adoption.md` and README for configuration and DLQ replay guidance.
 

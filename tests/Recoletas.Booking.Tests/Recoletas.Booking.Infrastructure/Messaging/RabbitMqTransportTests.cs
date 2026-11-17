@@ -1,6 +1,7 @@
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
+using Recoletas.Booking.Contracts.Events;
 using Recoletas.Booking.Contracts.Models;
 using Recoletas.Booking.Infrastructure.Messaging;
 using Recoletas.Booking.Tests.TestSupport;
@@ -14,24 +15,10 @@ public sealed class RabbitMqTransportTests
     [TestMethod]
     public async Task PublishAndConsume_RealBroker_ConfirmsRoutesRetriesAndDeadLetters()
     {
-        var virtualHost = Environment.GetEnvironmentVariable("RabbitMqTests__VirtualHost");
-        if (string.IsNullOrWhiteSpace(virtualHost))
-        {
-            Assert.Inconclusive("Set RabbitMqTests__VirtualHost to a dedicated EMPTY test vhost, plus UserName/Password.");
-        }
-
-        var options = new RabbitMqOptions
-        {
-            HostName = Environment.GetEnvironmentVariable("RabbitMqTests__HostName") ?? "localhost",
-            VirtualHost = virtualHost,
-            UserName = Environment.GetEnvironmentVariable("RabbitMqTests__UserName") ?? "",
-            Password = Environment.GetEnvironmentVariable("RabbitMqTests__Password") ?? "",
-            RetryDelay = TimeSpan.FromMilliseconds(100),
-            MaxConsumerAttempts = 2
-        };
+        var options = CreateOptions();
         await using var connection = new RabbitMqConnection(options);
         await using var channel = await connection.CreateChannelAsync(CancellationToken.None);
-        var message = new OutboxMessage(Guid.NewGuid(), "SlotReleased", "{}", DateTimeOffset.UtcNow);
+        var message = new OutboxMessage(Guid.NewGuid(), BookingEventTypes.SlotReleased, "{}", DateTimeOffset.UtcNow);
         var handler = new RabbitMqDeliveryHandler(options, new CapturingLogger<RabbitMqDeliveryHandler>());
 
         await RabbitMqDispatcher.PublishAsync(channel, message, CancellationToken.None);
@@ -51,7 +38,7 @@ public sealed class RabbitMqTransportTests
         Assert.AreEqual(2, dead.BasicProperties.Headers!["booking-retry-count"]);
         await channel.BasicAckAsync(dead.DeliveryTag, false);
 
-        var notification = message with { Id = Guid.NewGuid(), EventType = "AppointmentConfirmed" };
+        var notification = message with { Id = Guid.NewGuid(), EventType = BookingEventTypes.AppointmentConfirmed };
         await RabbitMqDispatcher.PublishAsync(channel, notification, CancellationToken.None);
         var received = await GetAsync(channel, RabbitMqTopology.NotificationQueue);
         Assert.AreEqual(notification.Id.ToString(), received.BasicProperties.MessageId);
@@ -60,6 +47,42 @@ public sealed class RabbitMqTransportTests
         await Assert.ThrowsExactlyAsync<PublishReturnException>(async () =>
             await channel.BasicPublishAsync(RabbitMqTopology.Exchange, "no-binding", true,
                 new BasicProperties { Persistent = true }, ReadOnlyMemory<byte>.Empty));
+    }
+
+    [DataTestMethod]
+    [DataRow("SlotReleased")]
+    [DataRow("HoldConfirmationRequested")]
+    [DataRow("OfferCreated")]
+    [DataRow("AppointmentConfirmed")]
+    public async Task Publish_UnversionedRoutingKey_IsUnroutable(string routingKey)
+    {
+        var options = CreateOptions();
+        await using var connection = new RabbitMqConnection(options);
+        await using var channel = await connection.CreateChannelAsync(CancellationToken.None);
+
+        await Assert.ThrowsExactlyAsync<PublishReturnException>(async () =>
+            await channel.BasicPublishAsync(RabbitMqTopology.Exchange, routingKey, true,
+                new BasicProperties { Persistent = true }, ReadOnlyMemory<byte>.Empty));
+    }
+
+    private static RabbitMqOptions CreateOptions()
+    {
+        var virtualHost = Environment.GetEnvironmentVariable("RabbitMqTests__VirtualHost");
+        if (string.IsNullOrWhiteSpace(virtualHost))
+        {
+            Assert.Inconclusive("Set RabbitMqTests__VirtualHost to a dedicated EMPTY test vhost, plus UserName/Password.");
+        }
+
+        return new RabbitMqOptions
+        {
+            HostName = Environment.GetEnvironmentVariable("RabbitMqTests__HostName") ?? "localhost",
+            Port = int.Parse(Environment.GetEnvironmentVariable("RabbitMqTests__Port") ?? "5672"),
+            VirtualHost = virtualHost,
+            UserName = Environment.GetEnvironmentVariable("RabbitMqTests__UserName") ?? "",
+            Password = Environment.GetEnvironmentVariable("RabbitMqTests__Password") ?? "",
+            RetryDelay = TimeSpan.FromMilliseconds(100),
+            MaxConsumerAttempts = 2
+        };
     }
 
     private static BasicDeliverEventArgs ToDelivery(BasicGetResult result) =>

@@ -2,6 +2,7 @@ using System.Text;
 using Moq;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using Recoletas.Booking.Contracts.Events;
 using Recoletas.Booking.Infrastructure.Messaging;
 using Recoletas.Booking.Tests.TestSupport;
 
@@ -37,7 +38,7 @@ public sealed class RabbitMqDeliveryHandlerTests
         var delivery = CreateDelivery(retries);
         channel.Setup(c => c.BasicPublishAsync("", RabbitMqTopology.WorkflowQueue + suffix, true,
                 It.Is<BasicProperties>(p => p.Persistent && p.MessageId == delivery.BasicProperties.MessageId &&
-                    p.Type == "SlotReleased" && (int)p.Headers!["booking-retry-count"]! == retries + 1),
+                    p.Type == BookingEventTypes.SlotReleased && (int)p.Headers!["booking-retry-count"]! == retries + 1),
                 It.IsAny<ReadOnlyMemory<byte>>(), It.IsAny<CancellationToken>()))
             .Returns(new ValueTask(confirmation.Task));
         var handler = CreateHandler();
@@ -72,10 +73,10 @@ public sealed class RabbitMqDeliveryHandlerTests
         new(new RabbitMqOptions(), new CapturingLogger<RabbitMqDeliveryHandler>());
 
     private static BasicDeliverEventArgs CreateDelivery(int retries) => new("consumer", 1, false,
-        RabbitMqTopology.Exchange, "SlotReleased", new BasicProperties
+        RabbitMqTopology.Exchange, BookingEventTypes.SlotReleased, new BasicProperties
         {
             MessageId = Guid.NewGuid().ToString(),
-            Type = "SlotReleased",
+            Type = BookingEventTypes.SlotReleased,
             Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
             Headers = new Dictionary<string, object?> { ["booking-retry-count"] = retries }
         }, Encoding.UTF8.GetBytes("{}"));
